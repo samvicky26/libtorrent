@@ -40,7 +40,8 @@ func CreateTorrent(path string, announs []string) []byte {
 // Create libtorrent object
 //
 //export Create
-func Create() bool {
+func Create(DestDir string) bool {
+	clientConfig.DataDir = DestDir
 	client, err = torrent.NewClient(&clientConfig)
 	if err != nil {
 		return false
@@ -357,7 +358,7 @@ func TorrentTrackers(i int) []Tracker {
 	t := torrents[i]
 	var tt []Tracker
 	for _, v := range t.Trackers() {
-		tt = append(tt, Tracker{v.Url, v.Err, v.LastAnnounce, v.NextAnnounce, v.Peers, v.LastScrape, 0, 0, 0})
+		tt = append(tt, Tracker{v.Url, v.Err, v.LastAnnounce, v.NextAnnounce, v.Peers, 0, 0, 0, 0})
 	}
 	return tt
 }
