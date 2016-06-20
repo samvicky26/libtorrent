@@ -127,7 +127,16 @@ func GetTorrent(i int) []byte {
 //
 //export SaveTorrent
 func SaveTorrent(i int) []byte {
-	return nil
+	t := torrents[i]
+
+	var b []byte
+
+	b, err = client.SaveTorrent(t)
+	if err != nil {
+		return nil
+	}
+
+	return b
 }
 
 // LoadTorrent
@@ -136,7 +145,12 @@ func SaveTorrent(i int) []byte {
 //
 //export LoadTorrent
 func LoadTorrent(buf []byte) int {
-	return -1
+	var t *torrent.Torrent
+	t, err = client.LoadTorrent(buf)
+	if err != nil {
+		return -1
+	}
+	return register(t)
 }
 
 // Separate load / create torrent from network activity.
@@ -284,10 +298,10 @@ func TorrentStats(i int) *BytesInfo {
 }
 
 type File struct {
-	Check          bool
-	Path           string
-	Length         int64
-	BytesCompleted int64
+	Check  bool
+	Path   string
+	Length int64
+	//BytesCompleted int64
 }
 
 // return torrent files array
@@ -321,22 +335,31 @@ func TorrentPeers(i int) []torrent.Peer {
 //
 //export TorrentFileRename
 func TorrentFileRename(i int, f int, n string) {
+	panic("not implement")
 }
 
 type Tracker struct {
-	// url or DHT LSD
+	// Tracker URI or DHT, LSD, PE
 	Addr         string
 	Error        string
-	LastAnnounce int
-	NextAnnounce int
-	LastScrape   int
-	Seeders      int
-	Leechers     int
-	Downloaded   int
+	LastAnnounce int64
+	NextAnnounce int64
+	Peers        int
+
+	// scrape info
+	LastScrape int64
+	Seeders    int
+	Leechers   int
+	Downloaded int
 }
 
 func TorrentTrackers(i int) []Tracker {
-	return nil
+	t := torrents[i]
+	var tt []Tracker
+	for _, v := range t.Trackers() {
+		tt = append(tt, Tracker{v.Url, v.Err, v.LastAnnounce, v.NextAnnounce, v.Peers, v.LastScrape, 0, 0, 0})
+	}
+	return tt
 }
 
 //
