@@ -380,6 +380,21 @@ func TorrentPieces(i int) []torrent.PieceStateRun {
 	return t.PieceStateRuns()
 }
 
+func TorrentCreator(i int) string {
+	t := torrents[i]
+	return t.Metainfo().CreatedBy
+}
+
+func TorrentCreateOn(i int) int64 {
+	t := torrents[i]
+	return t.Metainfo().CreationDate
+}
+
+func TorrentComment(i int) string {
+	t := torrents[i]
+	return t.Metainfo().Comment
+}
+
 // TorrentFileRename
 //
 // To implement this we need to keep two Metainfo one for network operations,
