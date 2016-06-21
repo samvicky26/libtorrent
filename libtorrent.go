@@ -6,6 +6,7 @@ import "C"
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
@@ -101,6 +102,11 @@ func AddMagnet(path string, magnet string) int {
 		return -1
 	}
 
+	if _, ok := filestorage[t.InfoHash()]; ok {
+		err = errors.New("Already exists")
+		return -1
+	}
+
 	filestorage[t.InfoHash()] = path
 
 	return register(t)
@@ -122,6 +128,11 @@ func AddTorrent(path string, file string) int {
 
 	t, err = client.AddTorrent(metaInfo)
 	if err != nil {
+		return -1
+	}
+
+	if _, ok := filestorage[t.InfoHash()]; ok {
+		err = errors.New("Already exists")
 		return -1
 	}
 
@@ -186,6 +197,9 @@ func LoadTorrent(path string, buf []byte) int {
 	if err != nil {
 		return -1
 	}
+
+	// prevent addind magnets/torrents with same hash
+	filestorage[t.InfoHash()] = path
 
 	return register(t)
 }
