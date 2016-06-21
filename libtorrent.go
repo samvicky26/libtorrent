@@ -240,7 +240,7 @@ func TorrentMetainfo(i int) *metainfo.MetaInfo {
 func TorrentHash(i int) string {
 	t := torrents[i]
 	h := t.InfoHash()
-	return h.AsString()
+	return h.HexString()
 }
 
 //export TorrentName
