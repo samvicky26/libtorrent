@@ -380,19 +380,34 @@ func TorrentPieces(i int) []torrent.PieceStateRun {
 	return t.PieceStateRuns()
 }
 
+//export TorrentCreator
 func TorrentCreator(i int) string {
 	t := torrents[i]
 	return t.Metainfo().CreatedBy
 }
 
+//export TorrentCreateOn
 func TorrentCreateOn(i int) int64 {
 	t := torrents[i]
 	return t.Metainfo().CreationDate
 }
 
+//export TorrentComment
 func TorrentComment(i int) string {
 	t := torrents[i]
 	return t.Metainfo().Comment
+}
+
+func TorrentDateAdded(i int) int64 {
+	t := torrents[i]
+	a, _ := t.Dates()
+	return a
+}
+
+func TorrentDateCompleted(i int) int64 {
+	t := torrents[i]
+	_, c := t.Dates()
+	return c
 }
 
 // TorrentFileRename
