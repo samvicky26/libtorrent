@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/storage"
 	"sync"
 )
 
@@ -35,21 +36,30 @@ func CreateTorrent(path string, announs []string) []byte {
 	return b.Bytes()
 }
 
+type torrentOpener struct {
+}
+
+func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, error) {
+	return storage.NewFile(clientConfig.DataDir).OpenTorrent(info)
+}
+
 // Create
 //
 // Create libtorrent object
 //
 //export Create
-func Create(DestDir string) bool {
+func Create() bool {
 	torrents = make(map[int]*torrent.Torrent)
 	index = 0
 
-	clientConfig.DataDir = DestDir
+	clientConfig.DefaultStorage = &torrentOpener{}
 	clientConfig.Seed = true
+
 	client, err = torrent.NewClient(&clientConfig)
 	if err != nil {
 		return false
 	}
+
 	return true
 }
 
@@ -75,12 +85,16 @@ func Count() int {
 // Add magnet link to download list
 //
 //export AddMagnet
-func AddMagnet(magnet string) int {
+func AddMagnet(path string, magnet string) int {
 	var t *torrent.Torrent
+
+	clientConfig.DataDir = path
+
 	t, err = client.AddMagnet(magnet)
 	if err != nil {
 		return -1
 	}
+
 	return register(t)
 }
 
@@ -89,17 +103,22 @@ func AddMagnet(magnet string) int {
 // Add torrent to download list
 //
 //export AddTorrent
-func AddTorrent(file string) int {
+func AddTorrent(path string, file string) int {
+	var t *torrent.Torrent
 	var metaInfo *metainfo.MetaInfo
+
 	metaInfo, err = metainfo.LoadFromFile(file)
 	if err != nil {
 		return -1
 	}
-	var t *torrent.Torrent
+
+	clientConfig.DataDir = path
+
 	t, err = client.AddTorrent(metaInfo)
 	if err != nil {
 		return -1
 	}
+
 	return register(t)
 }
 
@@ -149,8 +168,10 @@ func SaveTorrent(i int) []byte {
 // Load runtime torrent data from saved state file
 //
 //export LoadTorrent
-func LoadTorrent(buf []byte) int {
+func LoadTorrent(path string, buf []byte) int {
 	var t *torrent.Torrent
+
+	clientConfig.DataDir = path
 
 	t, err = client.LoadTorrent(buf)
 	if err != nil {
@@ -158,6 +179,13 @@ func LoadTorrent(buf []byte) int {
 	}
 
 	return register(t)
+}
+
+// Set Torrent storage path
+//
+//export PathTorrent
+func PathTorrent(i int, path string) {
+
 }
 
 // Separate load / create torrent from network activity.
