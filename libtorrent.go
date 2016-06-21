@@ -10,15 +10,16 @@ import (
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
+	"path"
 	"sync"
 )
 
-//export CreateTorrent
-func CreateTorrent(path string, announs []string) []byte {
+//export CreateTorrentFile
+func CreateTorrentFile(path string) []byte {
 	mi := metainfo.MetaInfo{}
-	for _, a := range announs {
-		mi.AnnounceList = append(mi.AnnounceList, []string{a})
-	}
+	// for _, a := range announs {
+	//   mi.AnnounceList = append(mi.AnnounceList, []string{a})
+	// }
 	mi.SetDefaults()
 	err = mi.Info.BuildFromFilePath(path)
 	if err != nil {
@@ -89,6 +90,35 @@ func Count() int {
 	return len(torrents)
 }
 
+//export CreateTorrent
+func CreateTorrent(p string) int {
+	var t *torrent.Torrent
+
+	mi := &metainfo.MetaInfo{}
+	mi.SetDefaults()
+
+	err = mi.Info.BuildFromFilePath(p)
+	if err != nil {
+		return -1
+	}
+
+	mi.Info.UpdateBytes()
+
+	if _, ok := filestorage[mi.Info.Hash()]; ok {
+		err = errors.New("Already exists")
+		return -1
+	}
+
+	filestorage[mi.Info.Hash()] = path.Dir(p)
+
+	t, err = client.AddTorrent(mi)
+	if err != nil {
+		return -1
+	}
+
+	return register(t)
+}
+
 // AddMagnet
 //
 // Add magnet link to download list
@@ -96,18 +126,24 @@ func Count() int {
 //export AddMagnet
 func AddMagnet(path string, magnet string) int {
 	var t *torrent.Torrent
+	var spec *torrent.TorrentSpec
 
-	t, err = client.AddMagnet(magnet)
+	spec, err = torrent.TorrentSpecFromMagnetURI(magnet)
 	if err != nil {
 		return -1
 	}
 
-	if _, ok := filestorage[t.InfoHash()]; ok {
+	if _, ok := filestorage[spec.InfoHash]; ok {
 		err = errors.New("Already exists")
 		return -1
 	}
 
-	filestorage[t.InfoHash()] = path
+	filestorage[spec.InfoHash] = path
+
+	t, _, err = client.AddTorrentSpec(spec)
+	if err != nil {
+		return -1
+	}
 
 	return register(t)
 }
@@ -126,17 +162,17 @@ func AddTorrent(path string, file string) int {
 		return -1
 	}
 
-	t, err = client.AddTorrent(metaInfo)
-	if err != nil {
-		return -1
-	}
-
-	if _, ok := filestorage[t.InfoHash()]; ok {
+	if _, ok := filestorage[metaInfo.Info.Hash()]; ok {
 		err = errors.New("Already exists")
 		return -1
 	}
 
-	filestorage[t.InfoHash()] = path
+	filestorage[metaInfo.Info.Hash()] = path
+
+	t, err = client.AddTorrent(metaInfo)
+	if err != nil {
+		return -1
+	}
 
 	return register(t)
 }
