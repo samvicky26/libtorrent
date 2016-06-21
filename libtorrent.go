@@ -9,7 +9,6 @@ import (
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
-	"log"
 	"sync"
 )
 
@@ -47,7 +46,7 @@ func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, err
 	if p, ok = filestorage[info.Hash()]; !ok {
 		p = clientConfig.DataDir
 	}
-	log.Println(p)
+
 	return storage.NewFile(p).OpenTorrent(info)
 }
 
