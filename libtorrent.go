@@ -365,6 +365,21 @@ func TorrentPeers(i int) []torrent.Peer {
 	return t.Peers()
 }
 
+func TorrentPeiecesCount(i int) int {
+	t := torrents[i]
+	return t.NumPieces()
+}
+
+func TorrentPeieceLength(i int) int64 {
+	t := torrents[i]
+	return t.Info().PieceLength
+}
+
+func TorrentPeieces(i int) []torrent.PieceStateRun {
+	t := torrents[i]
+	return t.PieceStateRuns()
+}
+
 // TorrentFileRename
 //
 // To implement this we need to keep two Metainfo one for network operations,
