@@ -9,6 +9,7 @@ import (
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
+	"log"
 	"sync"
 )
 
@@ -40,7 +41,14 @@ type torrentOpener struct {
 }
 
 func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, error) {
-	return storage.NewFile(clientConfig.DataDir).OpenTorrent(info)
+	var p string
+	var ok bool
+
+	if p, ok = filestorage[info.Hash()]; !ok {
+		p = clientConfig.DataDir
+	}
+	log.Println(p)
+	return storage.NewFile(p).OpenTorrent(info)
 }
 
 // Create
@@ -50,6 +58,7 @@ func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, err
 //export Create
 func Create() bool {
 	torrents = make(map[int]*torrent.Torrent)
+	filestorage = make(map[metainfo.Hash]string)
 	index = 0
 
 	clientConfig.DefaultStorage = &torrentOpener{}
@@ -88,12 +97,12 @@ func Count() int {
 func AddMagnet(path string, magnet string) int {
 	var t *torrent.Torrent
 
-	clientConfig.DataDir = path
-
 	t, err = client.AddMagnet(magnet)
 	if err != nil {
 		return -1
 	}
+
+	filestorage[t.InfoHash()] = path
 
 	return register(t)
 }
@@ -112,12 +121,12 @@ func AddTorrent(path string, file string) int {
 		return -1
 	}
 
-	clientConfig.DataDir = path
-
 	t, err = client.AddTorrent(metaInfo)
 	if err != nil {
 		return -1
 	}
+
+	filestorage[t.InfoHash()] = path
 
 	return register(t)
 }
@@ -171,6 +180,7 @@ func SaveTorrent(i int) []byte {
 func LoadTorrent(path string, buf []byte) int {
 	var t *torrent.Torrent
 
+	// will be read immidialtly within client.LoadTorrent call
 	clientConfig.DataDir = path
 
 	t, err = client.LoadTorrent(buf)
@@ -179,13 +189,6 @@ func LoadTorrent(path string, buf []byte) int {
 	}
 
 	return register(t)
-}
-
-// Set Torrent storage path
-//
-//export PathTorrent
-func PathTorrent(i int, path string) {
-
 }
 
 // Separate load / create torrent from network activity.
@@ -405,6 +408,7 @@ var clientConfig torrent.Config
 var client *torrent.Client
 var err error
 var torrents map[int]*torrent.Torrent
+var filestorage map[metainfo.Hash]string
 var index int
 var mu sync.Mutex
 
@@ -417,12 +421,16 @@ func register(t *torrent.Torrent) int {
 		index++
 	}
 	torrents[index] = t
+
 	return index
 }
 
 func unregister(i int) {
 	mu.Lock()
 	defer mu.Unlock()
+
+	t := torrents[i]
+	delete(filestorage, t.InfoHash())
 
 	delete(torrents, i)
 }
