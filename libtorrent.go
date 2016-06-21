@@ -42,6 +42,7 @@ func CreateTorrent(path string, announs []string) []byte {
 //export Create
 func Create(DestDir string) bool {
 	clientConfig.DataDir = DestDir
+	clientConfig.Seed = true
 	client, err = torrent.NewClient(&clientConfig)
 	if err != nil {
 		return false
@@ -248,6 +249,12 @@ func TorrentName(i int) string {
 	return t.Name()
 }
 
+//export TorrentActive
+func TorrentActive(i int) bool {
+	t := torrents[i]
+	return client.ActiveTorrent(t)
+}
+
 const (
 	StatusPaused      int32 = 0
 	StatusDownloading int32 = 1
@@ -260,11 +267,15 @@ func TorrentStatus(i int) int32 {
 	t := torrents[i]
 
 	if client.ActiveTorrent(t) {
-		if t.Seeding() {
-			return StatusSeeding
-		} else {
-			return StatusDownloading
+		if t.Info() != nil {
+			// TODO t.Seeding() not working
+			if t.BytesCompleted() == t.Length() {
+				if t.Seeding() {
+					return StatusSeeding
+				}
+			}
 		}
+		return StatusDownloading
 	} else {
 		return StatusPaused
 	}
