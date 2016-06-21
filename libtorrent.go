@@ -365,17 +365,17 @@ func TorrentPeers(i int) []torrent.Peer {
 	return t.Peers()
 }
 
-func TorrentPeiecesCount(i int) int {
+func TorrentPiecesCount(i int) int {
 	t := torrents[i]
 	return t.NumPieces()
 }
 
-func TorrentPeieceLength(i int) int64 {
+func TorrentPiecesLength(i int) int64 {
 	t := torrents[i]
 	return t.Info().PieceLength
 }
 
-func TorrentPeieces(i int) []torrent.PieceStateRun {
+func TorrentPieces(i int) []torrent.PieceStateRun {
 	t := torrents[i]
 	return t.PieceStateRuns()
 }
