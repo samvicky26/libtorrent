@@ -259,26 +259,14 @@ const (
 func TorrentStatus(i int) int32 {
 	t := torrents[i]
 
-	if t.Info() != nil {
-		if t.BytesCompleted() < t.Length() {
-			if client.ActiveTorrent(t) {
-				return StatusDownloading
-			} else {
-				return StatusPaused
-			}
+	if client.ActiveTorrent(t) {
+		if t.Seeding() {
+			return StatusSeeding
 		} else {
-			if t.Seeding() {
-				return StatusSeeding
-			} else {
-				return StatusPaused
-			}
+			return StatusDownloading
 		}
 	} else {
-		if client.ActiveTorrent(t) {
-			return StatusDownloading
-		} else {
-			return StatusPaused
-		}
+		return StatusPaused
 	}
 }
 
@@ -295,7 +283,9 @@ func TorrentBytesCompleted(i int) int64 {
 }
 
 func TorrentStats(i int) *BytesInfo {
-	return &BytesInfo{}
+	t := torrents[i]
+	d, u := t.Stats()
+	return &BytesInfo{d, u}
 }
 
 type File struct {
