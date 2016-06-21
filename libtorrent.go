@@ -41,6 +41,9 @@ func CreateTorrent(path string, announs []string) []byte {
 //
 //export Create
 func Create(DestDir string) bool {
+	torrents = make(map[int]*torrent.Torrent)
+	index = 0
+
 	clientConfig.DataDir = DestDir
 	clientConfig.Seed = true
 	client, err = torrent.NewClient(&clientConfig)
@@ -131,14 +134,14 @@ func GetTorrent(i int) []byte {
 func SaveTorrent(i int) []byte {
 	t := torrents[i]
 
-	var b []byte
+	var buf []byte
 
-	b, err = client.SaveTorrent(t)
+	buf, err = client.SaveTorrent(t)
 	if err != nil {
 		return nil
 	}
 
-	return b
+	return buf
 }
 
 // LoadTorrent
@@ -148,10 +151,12 @@ func SaveTorrent(i int) []byte {
 //export LoadTorrent
 func LoadTorrent(buf []byte) int {
 	var t *torrent.Torrent
+
 	t, err = client.LoadTorrent(buf)
 	if err != nil {
 		return -1
 	}
+
 	return register(t)
 }
 
@@ -371,7 +376,7 @@ func TorrentTrackers(i int) []Tracker {
 var clientConfig torrent.Config
 var client *torrent.Client
 var err error
-var torrents = make(map[int]*torrent.Torrent)
+var torrents map[int]*torrent.Torrent
 var index int
 var mu sync.Mutex
 
