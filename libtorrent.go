@@ -43,10 +43,11 @@ type torrentOpener struct {
 
 func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, error) {
 	var p string
-	var ok bool
 
-	if p, ok = filestorage[info.Hash()]; !ok {
+	if s, ok := filestorage[info.Hash()]; !ok {
 		p = clientConfig.DataDir
+	} else {
+		p = s.Path
 	}
 
 	return storage.NewFile(p).OpenTorrent(info)
@@ -59,7 +60,7 @@ func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, err
 //export Create
 func Create() bool {
 	torrents = make(map[int]*torrent.Torrent)
-	filestorage = make(map[metainfo.Hash]string)
+	filestorage = make(map[metainfo.Hash]*fileStorage)
 	index = 0
 
 	clientConfig.DefaultStorage = &torrentOpener{}
@@ -109,7 +110,7 @@ func CreateTorrent(p string) int {
 		return -1
 	}
 
-	filestorage[mi.Info.Hash()] = path.Dir(p)
+	filestorage[mi.Info.Hash()] = &fileStorage{Path: path.Dir(p)}
 
 	t, err = client.AddTorrent(mi)
 	if err != nil {
@@ -138,7 +139,7 @@ func AddMagnet(path string, magnet string) int {
 		return -1
 	}
 
-	filestorage[spec.InfoHash] = path
+	filestorage[spec.InfoHash] = &fileStorage{Path: path}
 
 	t, _, err = client.AddTorrentSpec(spec)
 	if err != nil {
@@ -167,7 +168,7 @@ func AddTorrent(path string, file string) int {
 		return -1
 	}
 
-	filestorage[metaInfo.Info.Hash()] = path
+	filestorage[metaInfo.Info.Hash()] = &fileStorage{Path: path}
 
 	t, err = client.AddTorrent(metaInfo)
 	if err != nil {
@@ -235,7 +236,7 @@ func LoadTorrent(path string, buf []byte) int {
 	}
 
 	// prevent addind magnets/torrents with same hash
-	filestorage[t.InfoHash()] = path
+	filestorage[t.InfoHash()] = &fileStorage{Path: path}
 
 	return register(t)
 }
@@ -391,33 +392,40 @@ type File struct {
 	//BytesCompleted int64
 }
 
-// return torrent files array
-func TorrentFiles(i int) []File {
+func TorrentFilesCount(i int) int {
 	t := torrents[i]
-	var ff []File
+	f := filestorage[t.InfoHash()]
+	f.Files = nil
 	for _, v := range t.Files() {
-		f := File{}
-		f.Check = true
-		f.Path = v.Path()
-		f.Length = v.Length()
-		ff = append(ff, f)
+		p := File{}
+		p.Check = true
+		p.Path = v.Path()
+		p.Length = v.Length()
+		f.Files = append(f.Files, p)
 	}
-	return ff
+	return len(f.Files)
+}
+
+// return torrent files array
+func TorrentFiles(i int, p int) *File {
+	t := torrents[i]
+	f := filestorage[t.InfoHash()]
+	return &f.Files[p]
 }
 
 func TorrentPeersCount(i int) int {
 	t := torrents[i]
-	return t.PeersCount()
+	f := filestorage[t.InfoHash()]
+
+	f.Peers = t.Peers()
+
+	return len(f.Peers) // t.PeersCount()
 }
 
-func TorrentPeers(i int) []torrent.Peer {
+func TorrentPeers(i int, p int) *torrent.Peer {
 	t := torrents[i]
-	return t.Peers()
-}
-
-func TorrentPiecesCount(i int) int {
-	t := torrents[i]
-	return t.NumPieces()
+	f := filestorage[t.InfoHash()]
+	return &f.Peers[p]
 }
 
 func TorrentPiecesLength(i int) int64 {
@@ -425,9 +433,17 @@ func TorrentPiecesLength(i int) int64 {
 	return t.Info().PieceLength
 }
 
-func TorrentPieces(i int) []torrent.PieceStateRun {
+func TorrentPiecesCount(i int) int {
 	t := torrents[i]
-	return t.PieceStateRuns()
+	f := filestorage[t.InfoHash()]
+	f.Pieces = t.PieceStateRuns()
+	return len(f.Pieces) //t.NumPieces()
+}
+
+func TorrentPieces(i int, p int) *torrent.PieceStateRun {
+	t := torrents[i]
+	f := filestorage[t.InfoHash()]
+	return &f.Pieces[p]
 }
 
 //export TorrentCreator
@@ -485,24 +501,39 @@ type Tracker struct {
 	Downloaded int
 }
 
-func TorrentTrackers(i int) []Tracker {
+func TorrentTrackersCount(i int) int {
 	t := torrents[i]
-	var tt []Tracker
+	f := filestorage[t.InfoHash()]
+	f.Trackers = nil
 	for _, v := range t.Trackers() {
-		tt = append(tt, Tracker{v.Url, v.Err, v.LastAnnounce, v.NextAnnounce, v.Peers, 0, 0, 0, 0})
+		f.Trackers = append(f.Trackers, Tracker{v.Url, v.Err, v.LastAnnounce, v.NextAnnounce, v.Peers, 0, 0, 0, 0})
 	}
-	return tt
+	return len(f.Trackers)
+}
+
+func TorrentTrackers(i int, p int) *Tracker {
+	t := torrents[i]
+	f := filestorage[t.InfoHash()]
+	return &f.Trackers[p]
 }
 
 //
 // protected
 //
 
+type fileStorage struct {
+	Path     string
+	Trackers []Tracker
+	Pieces   []torrent.PieceStateRun
+	Files    []File
+	Peers    []torrent.Peer
+}
+
 var clientConfig torrent.Config
 var client *torrent.Client
 var err error
 var torrents map[int]*torrent.Torrent
-var filestorage map[metainfo.Hash]string
+var filestorage map[metainfo.Hash]*fileStorage
 var index int
 var mu sync.Mutex
 
@@ -524,6 +555,7 @@ func unregister(i int) {
 	defer mu.Unlock()
 
 	t := torrents[i]
+
 	delete(filestorage, t.InfoHash())
 
 	delete(torrents, i)
