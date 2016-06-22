@@ -472,7 +472,13 @@ func TorrentPeers(i int, p int) *Peer {
 	return &f.Peers[p]
 }
 
-func TorrentPiecesLength(i int) int64 {
+type PieceStatus struct {
+	Complete bool
+	Checking bool
+	Partial  bool
+}
+
+func TorrentPieceLength(i int) int64 {
 	t := torrents[i]
 	return t.Info().PieceLength
 }
@@ -480,11 +486,17 @@ func TorrentPiecesLength(i int) int64 {
 func TorrentPiecesCount(i int) int {
 	t := torrents[i]
 	f := filestorage[t.InfoHash()]
-	f.Pieces = t.PieceStateRuns()
-	return len(f.Pieces) //t.NumPieces()
+	f.Pieces = nil
+	for _, v := range t.PieceStateRuns() {
+		p := PieceStatus{v.Complete, v.Checking, v.Partial}
+		for i := 0; i < v.Length; i++ {
+			f.Pieces = append(f.Pieces, p)
+		}
+	}
+	return len(f.Pieces)
 }
 
-func TorrentPieces(i int, p int) *torrent.PieceStateRun {
+func TorrentPieces(i int, p int) *PieceStatus {
 	t := torrents[i]
 	f := filestorage[t.InfoHash()]
 	return &f.Pieces[p]
@@ -578,7 +590,7 @@ func TorrentTrackerAdd(i int, addr string) {
 type fileStorage struct {
 	Path     string
 	Trackers []Tracker
-	Pieces   []torrent.PieceStateRun
+	Pieces   []PieceStatus
 	Files    []File
 	Peers    []Peer
 }
