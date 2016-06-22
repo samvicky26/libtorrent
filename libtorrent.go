@@ -561,6 +561,16 @@ func TorrentTrackers(i int, p int) *Tracker {
 	return &f.Trackers[p]
 }
 
+func TorrentTrackerRemove(i int, url string) {
+	t := torrents[i]
+	t.RemoveTracker(url)
+}
+
+func TorrentTrackerAdd(i int, addr string) {
+	t := torrents[i]
+	t.AddTrackers([][]string{[]string{addr}})
+}
+
 //
 // protected
 //
