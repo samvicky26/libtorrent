@@ -279,6 +279,8 @@ func StopTorrent(i int) {
 	t := torrents[i]
 	if client.ActiveTorrent(t) {
 		t.Drop()
+	} else {
+		t.Stop()
 	}
 }
 
@@ -360,7 +362,8 @@ const (
 	StatusPaused      int32 = 0
 	StatusDownloading int32 = 1
 	StatusSeeding     int32 = 2
-	StatusQueued      int32 = 3
+	StatusChecking    int32 = 3
+	StatusQueued      int32 = 4
 )
 
 //export TorrentStatus
@@ -378,6 +381,9 @@ func TorrentStatus(i int) int32 {
 		}
 		return StatusDownloading
 	} else {
+		if t.Check() {
+			return StatusChecking
+		}
 		return StatusPaused
 	}
 }
