@@ -7,7 +7,6 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
@@ -425,11 +424,13 @@ func TorrentFiles(i int, p int) *File {
 }
 
 type Peer struct {
+	Id     [20]byte
 	Name   string
 	Addr   string
 	Source string
 	// Peer is known to support encryption.
 	SupportsEncryption bool
+	PiecesCompleted    int
 	// how many data we downloaded/uploaded from peer
 	Downloaded int64
 	Uploaded   int64
@@ -460,7 +461,7 @@ func TorrentPeersCount(i int) int {
 		case peerSourcePEX:
 			p = "PEX"
 		}
-		f.Peers = append(f.Peers, Peer{string(v.Id[:]), fmt.Sprintf("%s:%d", v.IP.String(), v.Port), p, v.SupportsEncryption, v.Downloaded, v.Uploaded})
+		f.Peers = append(f.Peers, Peer{v.Id, v.Name, v.Addr, p, v.SupportsEncryption, v.PiecesCompleted, v.Downloaded, v.Uploaded})
 	}
 
 	return len(f.Peers) // t.PeersCount()
