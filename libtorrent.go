@@ -256,15 +256,20 @@ func LoadTorrent(path string, buf []byte) int {
 // Start announce torrent, seed/download
 //
 //export StartTorrent
-func StartTorrent(i int) {
+func StartTorrent(i int) bool {
 	t := torrents[i]
 
-	client.StartTorrent(t)
+	err = client.StartTorrent(t)
+	if err != nil {
+		return false
+	}
 
 	go func() {
 		<-t.GotInfo()
 		t.DownloadAll()
 	}()
+
+	return true
 }
 
 // Stop torrent from announce, check, seed, download
