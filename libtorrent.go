@@ -92,11 +92,21 @@ func Count() int {
 	return len(torrents)
 }
 
+var (
+	builtinAnnounceList = [][]string{
+		{"udp://tracker.openbittorrent.com:80"},
+		{"udp://tracker.kicks-ass.net:80/announce"},
+	}
+)
+
 //export CreateTorrent
 func CreateTorrent(p string) int {
 	var t *torrent.Torrent
 
-	mi := &metainfo.MetaInfo{}
+	mi := &metainfo.MetaInfo{
+		AnnounceList: builtinAnnounceList,
+	}
+
 	mi.SetDefaults()
 
 	err = mi.Info.BuildFromFilePath(p)
