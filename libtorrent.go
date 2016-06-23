@@ -13,6 +13,7 @@ import (
 	"github.com/syncthing/syncthing/lib/nat"
 	"github.com/syncthing/syncthing/lib/upnp"
 	"net"
+	"net/http"
 	"os"
 	"path"
 	"strconv"
@@ -88,11 +89,11 @@ func Create() bool {
 	mapping(1 * time.Second)
 
 	go func() {
-		for C := client.Stop(); C != nil; {
+		for {
 			intervalChan := time.After(refreshPort)
 
 			select {
-			case <-C:
+			case <-client.Stop():
 				return
 			case <-intervalChan:
 			}
@@ -677,7 +678,7 @@ func unregister(i int) {
 
 var tcpPort string
 var udpPort string
-var refreshPort time.Duration
+var refreshPort = 1 * time.Minute
 
 type PortInfo struct {
 	TCP string
@@ -686,6 +687,33 @@ type PortInfo struct {
 
 func PortMapping() *PortInfo {
 	return &PortInfo{tcpPort, udpPort}
+}
+
+func PortCheck() bool {
+	port := udpPort
+	if port == "" {
+		port = tcpPort
+	}
+	if port == "" {
+		_, port, err = net.SplitHostPort(clientAddr)
+		if err != nil {
+			return false
+		}
+	}
+	url := "http://portcheck.transmissionbt.com/" + port
+
+	var resp *http.Response
+	resp, err = http.Get(url)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(resp.Body)
+	s := buf.String()
+
+	return s == "1"
 }
 
 func mapping(timeout time.Duration) error {
@@ -698,8 +726,6 @@ func mapping(timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-
-	refreshPort = 5 * time.Minute
 
 	dd := upnp.Discover(timeout, timeout)
 
