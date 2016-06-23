@@ -761,7 +761,7 @@ func mapping(timeout time.Duration) error {
 		return err
 	}
 
-	port, err := net.LookupPort("tcp", pp)
+	localport, err := net.LookupPort("tcp", pp)
 	if err != nil {
 		return err
 	}
@@ -773,7 +773,7 @@ func mapping(timeout time.Duration) error {
 		if err != nil {
 			return err
 		}
-		p, err := getPort(d, nat.TCP, port, tcpPort)
+		p, err := getPort(d, nat.TCP, localport, tcpPort)
 		if err != nil {
 			return err
 		}
@@ -789,7 +789,7 @@ func mapping(timeout time.Duration) error {
 		if err != nil {
 			return err
 		}
-		p, err := getPort(d, nat.UDP, port, udpPort)
+		p, err := getPort(d, nat.UDP, localport, udpPort)
 		if err != nil {
 			return err
 		}
