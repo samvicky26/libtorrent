@@ -18,6 +18,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -131,6 +132,13 @@ var (
 		{"udp://tracker.kicks-ass.net:80/announce"},
 	}
 )
+
+func SetDefaultAnnouncesList(str string) {
+	builtinAnnounceList = nil
+	for _, s := range strings.Split(str, "\n") {
+		builtinAnnounceList = append(builtinAnnounceList, []string{s})
+	}
+}
 
 //export CreateTorrent
 func CreateTorrent(p string) int {
