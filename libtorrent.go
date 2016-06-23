@@ -688,11 +688,13 @@ func PortMapping() *PortInfo {
 }
 
 func PortCheck() bool {
-	port := udpPort
+	port := tcpPort
 	if port == "" {
-		port = tcpPort
+		// check does not perfome on UDP but what we can do?
+		port = udpPort
 	}
 	if port == "" {
+		// ports are not forwarded? using local socket port
 		_, port, err = net.SplitHostPort(clientAddr)
 		if err != nil {
 			return false
