@@ -727,7 +727,7 @@ func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, e
 	n = n + "libtorrent " + string(proto)
 
 	ext, err := net.LookupPort("tcp", extPort)
-	if err != nil {
+	if err != nil || ext == 0 {
 		ext = port
 	}
 
