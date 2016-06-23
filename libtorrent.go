@@ -723,7 +723,6 @@ func mapping(timeout time.Duration) error {
 		tcpPort = strconv.Itoa(p)
 		mu.Unlock()
 		client.SetListenTCPAddr(net.JoinHostPort(ext.String(), tcpPort))
-		println("set tcp!", p)
 		return nil
 	}
 
@@ -736,7 +735,6 @@ func mapping(timeout time.Duration) error {
 		if err != nil {
 			return err
 		}
-		println("set udp!", p)
 		mu.Lock()
 		udpPort = strconv.Itoa(p)
 		mu.Unlock()
@@ -748,15 +746,11 @@ func mapping(timeout time.Duration) error {
 		if tcp != nil {
 			if err := tcp(d); err == nil {
 				tcp = nil
-			} else {
-				println(err)
 			}
 		}
 		if udp != nil {
 			if err := udp(d); err == nil {
 				udp = nil
-			} else {
-				println(err)
 			}
 		}
 	}
