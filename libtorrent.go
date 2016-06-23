@@ -684,7 +684,7 @@ type PortInfo struct {
 }
 
 func PortMapping() *PortInfo {
-	return PortInfo{tcpPort, udpPort}
+	return &PortInfo{tcpPort, udpPort}
 }
 
 func mapping() error {
