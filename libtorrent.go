@@ -15,7 +15,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -23,12 +22,25 @@ import (
 	"time"
 )
 
+var (
+	builtinAnnounceList = [][]string{
+		{"udp://tracker.openbittorrent.com:80"},
+		{"udp://tracker.kicks-ass.net:80/announce"},
+	}
+)
+
+func SetDefaultAnnouncesList(str string) {
+	builtinAnnounceList = nil
+	for _, s := range strings.Split(str, "\n") {
+		builtinAnnounceList = append(builtinAnnounceList, []string{s})
+	}
+}
+
 //export CreateTorrentFile
 func CreateTorrentFile(path string) []byte {
-	mi := metainfo.MetaInfo{}
-	// for _, a := range announs {
-	//   mi.AnnounceList = append(mi.AnnounceList, []string{a})
-	// }
+	mi := &metainfo.MetaInfo{
+		AnnounceList: builtinAnnounceList,
+	}
 	mi.SetDefaults()
 	err = mi.Info.BuildFromFilePath(path)
 	if err != nil {
@@ -124,20 +136,6 @@ func Stats() *BytesInfo {
 //export Count
 func Count() int {
 	return len(torrents)
-}
-
-var (
-	builtinAnnounceList = [][]string{
-		{"udp://tracker.openbittorrent.com:80"},
-		{"udp://tracker.kicks-ass.net:80/announce"},
-	}
-)
-
-func SetDefaultAnnouncesList(str string) {
-	builtinAnnounceList = nil
-	for _, s := range strings.Split(str, "\n") {
-		builtinAnnounceList = append(builtinAnnounceList, []string{s})
-	}
 }
 
 //export CreateTorrent
@@ -725,14 +723,7 @@ func PortCheck() bool {
 }
 
 func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, error) {
-	n, err := os.Hostname()
-	if err != nil {
-		n = ""
-	} else {
-		n = n + " "
-	}
-
-	n = n + "libtorrent " + string(proto)
+	n := "libtorrent " + strings.ToLower(string(proto))
 
 	ext, err := net.LookupPort("tcp", extPort)
 	if err != nil || ext == 0 {
