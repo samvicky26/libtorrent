@@ -13,6 +13,7 @@ import (
 	"github.com/syncthing/syncthing/lib/nat"
 	"github.com/syncthing/syncthing/lib/upnp"
 	"net"
+	"os"
 	"path"
 	"strconv"
 	"sync"
@@ -702,12 +703,19 @@ func mapping() error {
 
 	dd := upnp.Discover(1*time.Second, 1*time.Second)
 
+	n, err := os.Hostname()
+	if err != nil {
+		n = ""
+	} else {
+		n = n + " "
+	}
+
 	tcp := func(d nat.Device) error {
 		ext, err := d.GetExternalIPAddress()
 		if err != nil {
 			return err
 		}
-		p, err := d.AddPortMapping("tcp", port, port, "libtorrent tcp", 2*refreshPort)
+		p, err := d.AddPortMapping("tcp", port, port, n+"libtorrent tcp", 2*refreshPort)
 		if err != nil {
 			return err
 		}
@@ -723,7 +731,7 @@ func mapping() error {
 		if err != nil {
 			return err
 		}
-		p, err := d.AddPortMapping("udp", port, port, "libtorrent udp", 2*refreshPort)
+		p, err := d.AddPortMapping("udp", port, port, n+"libtorrent udp", 2*refreshPort)
 		if err != nil {
 			return err
 		}
