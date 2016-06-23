@@ -775,7 +775,6 @@ func mapping(timeout time.Duration) error {
 		mu.Lock()
 		tcpPort = strconv.Itoa(p)
 		mu.Unlock()
-		println("set tcp port")
 		client.SetListenTCPAddr(net.JoinHostPort(ext.String(), tcpPort))
 		return nil
 	}
@@ -792,7 +791,6 @@ func mapping(timeout time.Duration) error {
 		mu.Lock()
 		udpPort = strconv.Itoa(p)
 		mu.Unlock()
-		println("set udp port")
 		client.SetListenUDPAddr(net.JoinHostPort(ext.String(), udpPort))
 		return nil
 	}
@@ -801,15 +799,11 @@ func mapping(timeout time.Duration) error {
 		if tcp != nil {
 			if err := tcp(d); err == nil {
 				tcp = nil
-			} else {
-				println(err.Error())
 			}
 		}
 		if udp != nil {
 			if err := udp(d); err == nil {
 				udp = nil
-			} else {
-				println(err.Error())
 			}
 		}
 	}
@@ -818,7 +812,6 @@ func mapping(timeout time.Duration) error {
 		mu.Lock()
 		tcpPort = ""
 		mu.Unlock()
-		println("drop tcp port")
 		client.SetListenTCPAddr(clientAddr)
 	}
 
@@ -826,7 +819,6 @@ func mapping(timeout time.Duration) error {
 		mu.Lock()
 		udpPort = ""
 		mu.Unlock()
-		println("drop udp port")
 		client.SetListenUDPAddr(clientAddr)
 	}
 
