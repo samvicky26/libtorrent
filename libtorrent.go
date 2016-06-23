@@ -12,6 +12,7 @@ import (
 	"github.com/anacrolix/torrent/storage"
 	"github.com/syncthing/syncthing/lib/nat"
 	"github.com/syncthing/syncthing/lib/upnp"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -88,24 +89,21 @@ func Create() bool {
 
 	mapping(1 * time.Second)
 
-	go func() {
-		for {
-			intervalChan := time.After(refreshPort)
-
-			select {
-			case <-client.Stop():
-				return
-			case <-intervalChan:
-			}
-
-			mapping(5 * time.Second)
-		}
-	}()
-
 	err = client.Start()
 	if err != nil {
 		return false
 	}
+
+	go func() {
+		for {
+			select {
+			case <-client.Stop():
+				return
+			case <-time.After(refreshPort):
+			}
+			mapping(5 * time.Second)
+		}
+	}()
 
 	return true
 }
@@ -716,6 +714,42 @@ func PortCheck() bool {
 	return s == "1"
 }
 
+func getPort(d nat.Device, proto nat.Protocol, port int) (int, error) {
+	n, err := os.Hostname()
+	if err != nil {
+		n = ""
+	} else {
+		n = n + " "
+	}
+
+	n = n + "libtorrent " + string(proto)
+
+	// try specific port
+	p, err := d.AddPortMapping(proto, port, port, n, 2*refreshPort)
+	if err == nil {
+		return p, nil
+	}
+
+	// try random port
+	p, err = d.AddPortMapping(proto, port, 0, n, 2*refreshPort)
+	if err == nil {
+		return p, nil
+	}
+
+	// try rand port
+	for i := 0; i < 10; i++ {
+		// Then try up to ten random ports.
+		extPort := 1024 + rand.Intn(65535-1024)
+
+		p, err = d.AddPortMapping(proto, port, extPort, n, 2*refreshPort)
+		if err == nil {
+			return p, nil
+		}
+	}
+
+	return 0, err
+}
+
 func mapping(timeout time.Duration) error {
 	_, pp, err := net.SplitHostPort(clientAddr)
 	if err != nil {
@@ -729,25 +763,19 @@ func mapping(timeout time.Duration) error {
 
 	dd := upnp.Discover(timeout, timeout)
 
-	n, err := os.Hostname()
-	if err != nil {
-		n = ""
-	} else {
-		n = n + " "
-	}
-
 	tcp := func(d nat.Device) error {
 		ext, err := d.GetExternalIPAddress()
 		if err != nil {
 			return err
 		}
-		p, err := d.AddPortMapping(nat.TCP, port, port, n+"libtorrent tcp", 2*refreshPort)
+		p, err := getPort(d, nat.TCP, port)
 		if err != nil {
 			return err
 		}
 		mu.Lock()
 		tcpPort = strconv.Itoa(p)
 		mu.Unlock()
+		println("set tcp port")
 		client.SetListenTCPAddr(net.JoinHostPort(ext.String(), tcpPort))
 		return nil
 	}
@@ -757,13 +785,14 @@ func mapping(timeout time.Duration) error {
 		if err != nil {
 			return err
 		}
-		p, err := d.AddPortMapping(nat.UDP, port, port, n+"libtorrent udp", 2*refreshPort)
+		p, err := getPort(d, nat.UDP, port)
 		if err != nil {
 			return err
 		}
 		mu.Lock()
 		udpPort = strconv.Itoa(p)
 		mu.Unlock()
+		println("set udp port")
 		client.SetListenUDPAddr(net.JoinHostPort(ext.String(), udpPort))
 		return nil
 	}
@@ -772,11 +801,15 @@ func mapping(timeout time.Duration) error {
 		if tcp != nil {
 			if err := tcp(d); err == nil {
 				tcp = nil
+			} else {
+				println(err.Error())
 			}
 		}
 		if udp != nil {
 			if err := udp(d); err == nil {
 				udp = nil
+			} else {
+				println(err.Error())
 			}
 		}
 	}
@@ -785,6 +818,7 @@ func mapping(timeout time.Duration) error {
 		mu.Lock()
 		tcpPort = ""
 		mu.Unlock()
+		println("drop tcp port")
 		client.SetListenTCPAddr(clientAddr)
 	}
 
@@ -792,6 +826,7 @@ func mapping(timeout time.Duration) error {
 		mu.Lock()
 		udpPort = ""
 		mu.Unlock()
+		println("drop udp port")
 		client.SetListenUDPAddr(clientAddr)
 	}
 
