@@ -714,7 +714,7 @@ func PortCheck() bool {
 	return s == "1"
 }
 
-func getPort(d nat.Device, proto nat.Protocol, port int) (int, error) {
+func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, error) {
 	n, err := os.Hostname()
 	if err != nil {
 		n = ""
@@ -724,8 +724,13 @@ func getPort(d nat.Device, proto nat.Protocol, port int) (int, error) {
 
 	n = n + "libtorrent " + string(proto)
 
+	ext, err := net.LookupPort("tcp", extPort)
+	if err != nil {
+		ext = port
+	}
+
 	// try specific port
-	p, err := d.AddPortMapping(proto, port, port, n, 2*refreshPort)
+	p, err := d.AddPortMapping(proto, port, ext, n, 2*refreshPort)
 	if err == nil {
 		return p, nil
 	}
@@ -768,7 +773,7 @@ func mapping(timeout time.Duration) error {
 		if err != nil {
 			return err
 		}
-		p, err := getPort(d, nat.TCP, port)
+		p, err := getPort(d, nat.TCP, port, tcpPort)
 		if err != nil {
 			return err
 		}
@@ -784,7 +789,7 @@ func mapping(timeout time.Duration) error {
 		if err != nil {
 			return err
 		}
-		p, err := getPort(d, nat.UDP, port)
+		p, err := getPort(d, nat.UDP, port, udpPort)
 		if err != nil {
 			return err
 		}
