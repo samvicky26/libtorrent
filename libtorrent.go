@@ -78,7 +78,7 @@ func Create() bool {
 
 	clientConfig.DefaultStorage = &torrentOpener{}
 	clientConfig.Seed = true
-	clientConfig.ListenAddr = ":50007"
+	clientConfig.ListenAddr = ":0"
 
 	client, err = torrent.NewClient(&clientConfig)
 	if err != nil {
