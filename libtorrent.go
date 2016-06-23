@@ -10,8 +10,13 @@ import (
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
+	"github.com/syncthing/syncthing/lib/nat"
+	"github.com/syncthing/syncthing/lib/upnp"
+	"net"
 	"path"
+	"strconv"
 	"sync"
+	"time"
 )
 
 //export CreateTorrentFile
@@ -53,6 +58,11 @@ func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, err
 	return storage.NewFile(p).OpenTorrent(info)
 }
 
+//export ListenAddr
+func ListenAddr() string {
+	return client.ListenAddr().String()
+}
+
 // Create
 //
 // Create libtorrent object
@@ -65,8 +75,32 @@ func Create() bool {
 
 	clientConfig.DefaultStorage = &torrentOpener{}
 	clientConfig.Seed = true
+	clientConfig.ListenAddr = ":50007"
 
 	client, err = torrent.NewClient(&clientConfig)
+	if err != nil {
+		return false
+	}
+
+	clientAddr = client.ListenAddr().String()
+
+	mapping()
+
+	go func() {
+		for C := client.Stop(); C != nil; {
+			intervalChan := time.After(refreshPort)
+
+			select {
+			case <-C:
+				return
+			case <-intervalChan:
+			}
+
+			mapping()
+		}
+	}()
+
+	err = client.Start()
 	if err != nil {
 		return false
 	}
@@ -609,6 +643,7 @@ type fileStorage struct {
 
 var clientConfig torrent.Config
 var client *torrent.Client
+var clientAddr string
 var err error
 var torrents map[int]*torrent.Torrent
 var filestorage map[metainfo.Hash]*fileStorage
@@ -637,4 +672,94 @@ func unregister(i int) {
 	delete(filestorage, t.InfoHash())
 
 	delete(torrents, i)
+}
+
+var tcpPort string
+var udpPort string
+var refreshPort time.Duration
+
+type PortInfo struct {
+	TCP string
+	UDP string
+}
+
+func PortMapping() *PortInfo {
+	return PortInfo{tcpPort, udpPort}
+}
+
+func mapping() error {
+	_, pp, err := net.SplitHostPort(clientAddr)
+	if err != nil {
+		return err
+	}
+
+	port, err := net.LookupPort("tcp", pp)
+	if err != nil {
+		return err
+	}
+
+	refreshPort = 5 * time.Minute
+
+	dd := upnp.Discover(1*time.Second, 1*time.Second)
+
+	tcp := func(d nat.Device) error {
+		ext, err := d.GetExternalIPAddress()
+		if err != nil {
+			return err
+		}
+		p, err := d.AddPortMapping("tcp", port, port, "libtorrent", 2*refreshPort)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		tcpPort = strconv.Itoa(p)
+		mu.Unlock()
+		client.SetListenTCPAddr(net.JoinHostPort(ext.String(), tcpPort))
+		return nil
+	}
+
+	udp := func(d nat.Device) error {
+		ext, err := d.GetExternalIPAddress()
+		if err != nil {
+			return err
+		}
+		p, err := d.AddPortMapping("udp", port, port, "libtorrent", 2*refreshPort)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		udpPort = strconv.Itoa(p)
+		mu.Unlock()
+		client.SetListenUDPAddr(net.JoinHostPort(ext.String(), udpPort))
+		return nil
+	}
+
+	for _, d := range dd {
+		if tcp != nil {
+			if tcp(d) != nil {
+				tcp = nil
+			}
+		}
+		if udp != nil {
+			if udp(d) != nil {
+				udp = nil
+			}
+		}
+	}
+
+	if tcp != nil {
+		mu.Lock()
+		tcpPort = ""
+		mu.Unlock()
+		client.SetListenTCPAddr(clientAddr)
+	}
+
+	if udp != nil {
+		mu.Lock()
+		udpPort = ""
+		mu.Unlock()
+		client.SetListenUDPAddr(clientAddr)
+	}
+
+	return nil
 }
