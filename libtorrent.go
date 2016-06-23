@@ -707,7 +707,7 @@ func mapping() error {
 		if err != nil {
 			return err
 		}
-		p, err := d.AddPortMapping("tcp", port, port, "libtorrent", 2*refreshPort)
+		p, err := d.AddPortMapping("tcp", port, port, "libtorrent tcp", 2*refreshPort)
 		if err != nil {
 			return err
 		}
@@ -723,7 +723,7 @@ func mapping() error {
 		if err != nil {
 			return err
 		}
-		p, err := d.AddPortMapping("udp", port, port, "libtorrent", 2*refreshPort)
+		p, err := d.AddPortMapping("udp", port, port, "libtorrent udp", 2*refreshPort)
 		if err != nil {
 			return err
 		}
