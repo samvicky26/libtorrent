@@ -85,7 +85,7 @@ func Create() bool {
 
 	clientAddr = client.ListenAddr().String()
 
-	mapping()
+	mapping(1 * time.Second)
 
 	go func() {
 		for C := client.Stop(); C != nil; {
@@ -97,7 +97,7 @@ func Create() bool {
 			case <-intervalChan:
 			}
 
-			mapping()
+			mapping(5 * time.Second)
 		}
 	}()
 
@@ -688,7 +688,7 @@ func PortMapping() *PortInfo {
 	return &PortInfo{tcpPort, udpPort}
 }
 
-func mapping() error {
+func mapping(timeout time.Duration) error {
 	_, pp, err := net.SplitHostPort(clientAddr)
 	if err != nil {
 		return err
@@ -701,7 +701,7 @@ func mapping() error {
 
 	refreshPort = 5 * time.Minute
 
-	dd := upnp.Discover(1*time.Second, 1*time.Second)
+	dd := upnp.Discover(timeout, timeout)
 
 	n, err := os.Hostname()
 	if err != nil {
@@ -715,7 +715,7 @@ func mapping() error {
 		if err != nil {
 			return err
 		}
-		p, err := d.AddPortMapping("tcp", port, port, n+"libtorrent tcp", 2*refreshPort)
+		p, err := d.AddPortMapping(nat.TCP, port, port, n+"libtorrent tcp", 2*refreshPort)
 		if err != nil {
 			return err
 		}
@@ -723,6 +723,7 @@ func mapping() error {
 		tcpPort = strconv.Itoa(p)
 		mu.Unlock()
 		client.SetListenTCPAddr(net.JoinHostPort(ext.String(), tcpPort))
+		println("set tcp!", p)
 		return nil
 	}
 
@@ -731,10 +732,11 @@ func mapping() error {
 		if err != nil {
 			return err
 		}
-		p, err := d.AddPortMapping("udp", port, port, n+"libtorrent udp", 2*refreshPort)
+		p, err := d.AddPortMapping(nat.UDP, port, port, n+"libtorrent udp", 2*refreshPort)
 		if err != nil {
 			return err
 		}
+		println("set udp!", p)
 		mu.Lock()
 		udpPort = strconv.Itoa(p)
 		mu.Unlock()
@@ -744,13 +746,17 @@ func mapping() error {
 
 	for _, d := range dd {
 		if tcp != nil {
-			if tcp(d) != nil {
+			if err := tcp(d); err == nil {
 				tcp = nil
+			} else {
+				println(err)
 			}
 		}
 		if udp != nil {
-			if udp(d) != nil {
+			if err := udp(d); err == nil {
 				udp = nil
+			} else {
+				println(err)
 			}
 		}
 	}
