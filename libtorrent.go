@@ -201,16 +201,30 @@ func AddMagnet(path string, magnet string) int {
 
 // AddTorrent
 //
-// Add torrent to download list
+// Add torrent from local file or remote url.
 //
 //export AddTorrent
 func AddTorrent(path string, file string) int {
 	var t *torrent.Torrent
 	var metaInfo *metainfo.MetaInfo
 
-	metaInfo, err = metainfo.LoadFromFile(file)
-	if err != nil {
-		return -1
+	if strings.HasPrefix(file, "http") {
+		var resp *http.Response
+		resp, err = http.Get(file)
+		if err != nil {
+			return -1
+		}
+		defer resp.Body.Close()
+
+		metaInfo, err = metainfo.Load(resp.Body)
+		if err != nil {
+			return -1
+		}
+	} else {
+		metaInfo, err = metainfo.LoadFromFile(file)
+		if err != nil {
+			return -1
+		}
 	}
 
 	if _, ok := filestorage[metaInfo.Info.Hash()]; ok {
