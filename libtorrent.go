@@ -345,6 +345,11 @@ func DownloadMetadata(i int) bool {
 	return true
 }
 
+func InfoTorrent(i int) bool {
+	t := torrents[i]
+	return t.Info() != nil
+}
+
 // Stop torrent from announce, check, seed, download
 //
 //export StopTorrent
