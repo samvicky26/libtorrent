@@ -239,6 +239,10 @@ func AddTorrent(path string, file string) int {
 		return -1
 	}
 
+	t.comment = metaInfo.Comment
+	t.creator = metaInfo.CreatedBy
+	t.createdOn = metaInfo.CreationDate
+
 	return register(t)
 }
 
