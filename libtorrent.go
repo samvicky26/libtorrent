@@ -326,6 +326,25 @@ func StartTorrent(i int) bool {
 	return true
 }
 
+// Download only metadata from magnet link and stop torrent
+//
+//export DownloadMetadata
+func DownloadMetadata(i int) bool {
+	t := torrents[i]
+
+	err = client.StartTorrent(t)
+	if err != nil {
+		return false
+	}
+
+	go func() {
+		<-t.GotInfo()
+		StopTorrent(i)
+	}()
+
+	return true
+}
+
 // Stop torrent from announce, check, seed, download
 //
 //export StopTorrent
