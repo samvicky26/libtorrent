@@ -440,10 +440,17 @@ func TorrentBytesCompleted(i int) int64 {
 	return t.BytesCompleted()
 }
 
-func TorrentStats(i int) *BytesInfo {
+type StatsInfo struct {
+	Downloaded  int64
+	Uploaded    int64
+	Downloading int64
+	Seeding     int64
+}
+
+func TorrentStats(i int) *StatsInfo {
 	t := torrents[i]
-	d, u := t.Stats()
-	return &BytesInfo{d, u}
+	d, u, dd, ss := t.Stats()
+	return &StatsInfo{d, u, dd, ss}
 }
 
 type File struct {
