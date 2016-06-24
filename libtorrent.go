@@ -313,13 +313,21 @@ func LoadTorrent(path string, buf []byte) int {
 func StartTorrent(i int) bool {
 	t := torrents[i]
 
+	if client.ActiveTorrent(t) {
+		return true
+	}
+
 	err = client.StartTorrent(t)
 	if err != nil {
 		return false
 	}
 
 	go func() {
-		<-t.GotInfo()
+		select {
+		case <-t.GotInfo():
+		case <-t.Wait():
+			return
+		}
 		t.DownloadAll()
 	}()
 
@@ -332,13 +340,21 @@ func StartTorrent(i int) bool {
 func DownloadMetadata(i int) bool {
 	t := torrents[i]
 
+	if client.ActiveTorrent(t) {
+		return true
+	}
+
 	err = client.StartTorrent(t)
 	if err != nil {
 		return false
 	}
 
 	go func() {
-		<-t.GotInfo()
+		select {
+		case <-t.GotInfo():
+		case <-t.Wait():
+			return
+		}
 		StopTorrent(i)
 	}()
 
