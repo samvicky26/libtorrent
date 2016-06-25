@@ -110,7 +110,7 @@ func Create() bool {
 	go func() {
 		for {
 			select {
-			case <-client.Stop():
+			case <-client.Wait():
 				return
 			case <-time.After(refreshPort):
 			}
