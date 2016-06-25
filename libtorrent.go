@@ -242,6 +242,32 @@ func AddTorrent(path string, file string) int {
 	return register(t)
 }
 
+func AddTorrentFromBytes(path string, buf []byte) int {
+	var t *torrent.Torrent
+	var metaInfo *metainfo.MetaInfo
+
+	r := bytes.NewReader(buf)
+
+	metaInfo, err = metainfo.Load(r)
+	if err != nil {
+		return -1
+	}
+
+	if _, ok := filestorage[metaInfo.Info.Hash()]; ok {
+		err = errors.New("Already exists")
+		return -1
+	}
+
+	filestorage[metaInfo.Info.Hash()] = &fileStorage{Path: path}
+
+	t, err = client.AddTorrent(metaInfo)
+	if err != nil {
+		return -1
+	}
+
+	return register(t)
+}
+
 // Get Torrent file from runtime torrent
 //
 //export GetTorrent
