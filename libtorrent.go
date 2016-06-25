@@ -203,28 +203,50 @@ func AddMagnet(path string, magnet string) int {
 //
 // Add torrent from local file or remote url.
 //
-//export AddTorrent
-func AddTorrent(path string, file string) int {
+//export AddTorrentFromURL
+func AddTorrentFromURL(path string, url string) int {
 	var t *torrent.Torrent
 	var metaInfo *metainfo.MetaInfo
 
-	if strings.HasPrefix(file, "http") {
-		var resp *http.Response
-		resp, err = http.Get(file)
-		if err != nil {
-			return -1
-		}
-		defer resp.Body.Close()
+	var resp *http.Response
+	resp, err = http.Get(url)
+	if err != nil {
+		return -1
+	}
+	defer resp.Body.Close()
 
-		metaInfo, err = metainfo.Load(resp.Body)
-		if err != nil {
-			return -1
-		}
-	} else {
-		metaInfo, err = metainfo.LoadFromFile(file)
-		if err != nil {
-			return -1
-		}
+	metaInfo, err = metainfo.Load(resp.Body)
+	if err != nil {
+		return -1
+	}
+
+	if _, ok := filestorage[metaInfo.Info.Hash()]; ok {
+		err = errors.New("Already exists")
+		return -1
+	}
+
+	filestorage[metaInfo.Info.Hash()] = &fileStorage{Path: path}
+
+	t, err = client.AddTorrent(metaInfo)
+	if err != nil {
+		return -1
+	}
+
+	return register(t)
+}
+
+// AddTorrent
+//
+// Add torrent from local file or remote url.
+//
+//export AddTorrentFromFile
+func AddTorrentFromFile(path string, file string) int {
+	var t *torrent.Torrent
+	var metaInfo *metainfo.MetaInfo
+
+	metaInfo, err = metainfo.LoadFromFile(file)
+	if err != nil {
+		return -1
 	}
 
 	if _, ok := filestorage[metaInfo.Info.Hash()]; ok {
