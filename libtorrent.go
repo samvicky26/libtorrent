@@ -518,9 +518,12 @@ func TorrentFilesCount(i int) int {
 	t := torrents[i]
 	f := filestorage[t.InfoHash()]
 	f.Files = nil
-	for _, v := range t.Files() {
+
+	ff := t.Files()
+
+	for i, v := range ff {
 		p := File{}
-		p.Check = true
+		p.Check = t.FileCheck(i)
 		p.Path = v.Path()
 		p.Length = v.Length()
 		p.BytesCompleted = 0
@@ -534,6 +537,17 @@ func TorrentFiles(i int, p int) *File {
 	t := torrents[i]
 	f := filestorage[t.InfoHash()]
 	return &f.Files[p]
+}
+
+func TorrentFilesCheck(i int, p int, b bool) {
+	t := torrents[i]
+
+	f := filestorage[t.InfoHash()]
+
+	ff := f.Files[p]
+	ff.Check = b
+
+	t.FileSetCheck(p, b)
 }
 
 type Peer struct {
@@ -600,8 +614,9 @@ const (
 	PieceEmpty    int32 = 0
 	PieceComplete int32 = 1
 	PieceChecking int32 = 2
-	PiecePartial  int32 = 3
-	PieceWriting  int32 = 4
+	PiecePartial  int32 = 3 // when booth empty and completed
+	PieceWriting  int32 = 4 // when have partial pieces
+	PieceUnpended int32 = 5 // empy pieces can be unpended
 )
 
 func TorrentPiecesCompactCount(i int, size int) int {
@@ -609,6 +624,7 @@ func TorrentPiecesCompactCount(i int, size int) int {
 	f := filestorage[t.InfoHash()]
 	f.Pieces = nil
 
+	pended := false
 	empty := false
 	complete := false
 	partial := false
@@ -622,6 +638,10 @@ func TorrentPiecesCompactCount(i int, size int) int {
 				complete = true
 			} else {
 				empty = true
+				// at least one pice pendend then mark all (size) pendent
+				if t.PiecePended(i) {
+					pended = true
+				}
 			}
 			if v.Partial {
 				partial = true
@@ -639,11 +659,14 @@ func TorrentPiecesCompactCount(i int, size int) int {
 					state = PiecePartial
 				} else if complete {
 					state = PieceComplete
+				} else if !pended {
+					state = PieceUnpended
 				} else {
 					state = PieceEmpty
 				}
 				f.Pieces = append(f.Pieces, state)
 
+				pended = false
 				empty = false
 				complete = false
 				partial = false
@@ -662,6 +685,8 @@ func TorrentPiecesCompactCount(i int, size int) int {
 			state = PiecePartial
 		} else if complete {
 			state = PieceComplete
+		} else if !pended {
+			state = PieceUnpended
 		} else {
 			state = PieceEmpty
 		}
@@ -766,6 +791,7 @@ type fileStorage struct {
 	Trackers []Tracker
 	Pieces   []int32
 	Files    []File
+	Checks   []bool
 	Peers    []Peer
 }
 
