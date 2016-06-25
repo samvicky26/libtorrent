@@ -508,10 +508,10 @@ func TorrentStats(i int) *StatsInfo {
 }
 
 type File struct {
-	Check  bool
-	Path   string
-	Length int64
-	//BytesCompleted int64
+	Check          bool
+	Path           string
+	Length         int64
+	BytesCompleted int64
 }
 
 func TorrentFilesCount(i int) int {
@@ -523,6 +523,7 @@ func TorrentFilesCount(i int) int {
 		p.Check = true
 		p.Path = v.Path()
 		p.Length = v.Length()
+		p.BytesCompleted = 0
 		f.Files = append(f.Files, p)
 	}
 	return len(f.Files)
@@ -585,12 +586,6 @@ func TorrentPeers(i int, p int) *Peer {
 	return &f.Peers[p]
 }
 
-type PieceStatus struct {
-	Complete bool
-	Checking bool
-	Partial  bool
-}
-
 func TorrentPieceLength(i int) int64 {
 	t := torrents[i]
 	return t.Info().PieceLength
@@ -598,21 +593,89 @@ func TorrentPieceLength(i int) int64 {
 
 func TorrentPiecesCount(i int) int {
 	t := torrents[i]
+	return t.NumPieces()
+}
+
+const (
+	PieceEmpty    int32 = 0
+	PieceComplete int32 = 1
+	PieceChecking int32 = 2
+	PiecePartial  int32 = 3
+	PieceWriting  int32 = 4
+)
+
+func TorrentPiecesCompactCount(i int, size int) int {
+	t := torrents[i]
 	f := filestorage[t.InfoHash()]
 	f.Pieces = nil
+
+	empty := false
+	complete := false
+	partial := false
+	checking := false
+	count := 0
+
 	for _, v := range t.PieceStateRuns() {
-		p := PieceStatus{v.Complete, v.Checking, v.Partial}
 		for i := 0; i < v.Length; i++ {
-			f.Pieces = append(f.Pieces, p)
+			count = count + 1
+			if v.Complete {
+				complete = true
+			} else {
+				empty = true
+			}
+			if v.Partial {
+				partial = true
+			}
+			if v.Checking {
+				checking = true
+			}
+			if count >= size {
+				state := PieceEmpty
+				if checking {
+					state = PieceChecking
+				} else if partial {
+					state = PieceWriting
+				} else if empty && complete {
+					state = PiecePartial
+				} else if complete {
+					state = PieceComplete
+				} else {
+					state = PieceEmpty
+				}
+				f.Pieces = append(f.Pieces, state)
+
+				empty = false
+				complete = false
+				partial = false
+				checking = false
+				count = 0
+			}
 		}
+	}
+	if count >= size {
+		state := PieceEmpty
+		if checking {
+			state = PieceChecking
+		} else if partial {
+			state = PieceWriting
+		} else if empty && complete {
+			state = PiecePartial
+		} else if complete {
+			state = PieceComplete
+		} else {
+			state = PieceEmpty
+		}
+		f.Pieces = append(f.Pieces, state)
+		state = PieceEmpty
+		count = 0
 	}
 	return len(f.Pieces)
 }
 
-func TorrentPieces(i int, p int) *PieceStatus {
+func TorrentPiecesCompact(i int, p int) int32 {
 	t := torrents[i]
 	f := filestorage[t.InfoHash()]
-	return &f.Pieces[p]
+	return f.Pieces[p]
 }
 
 //export TorrentCreator
@@ -703,7 +766,7 @@ func TorrentTrackerAdd(i int, addr string) {
 type fileStorage struct {
 	Path     string
 	Trackers []Tracker
-	Pieces   []PieceStatus
+	Pieces   []int32
 	Files    []File
 	Peers    []Peer
 }
