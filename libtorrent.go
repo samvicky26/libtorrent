@@ -495,10 +495,15 @@ func TorrentBytesCompleted(i int) int64 {
 	return t.BytesCompleted()
 }
 
+// Get total bytes for pending pieces list
+func TorrentPendingBytesLength(i int) int64 {
+	t := torrents[i]
+	return t.PendingBytesLength()
+}
+
 // Get total bytes downloaded by pending pieces list
 func TorrentPendingBytesCompleted(i int) int64 {
 	t := torrents[i]
-
 	return t.PendingBytesCompleted()
 }
 
