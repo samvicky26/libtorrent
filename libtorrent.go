@@ -355,6 +355,7 @@ func DownloadMetadata(i int) bool {
 		case <-t.Wait():
 			return
 		}
+		t.FileUpdateCheck()
 		StopTorrent(i)
 	}()
 
