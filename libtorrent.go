@@ -328,7 +328,7 @@ func StartTorrent(i int) bool {
 		case <-t.Wait():
 			return
 		}
-		t.DownloadAll()
+		t.FileUpdateCheck()
 	}()
 
 	return true
