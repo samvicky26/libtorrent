@@ -495,6 +495,13 @@ func TorrentBytesCompleted(i int) int64 {
 	return t.BytesCompleted()
 }
 
+// Get total bytes downloaded by pending pieces list
+func TorrentPendingBytesCompleted(i int) int64 {
+	t := torrents[i]
+
+	return t.PendingBytesCompleted()
+}
+
 type StatsInfo struct {
 	Downloaded  int64
 	Uploaded    int64
