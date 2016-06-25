@@ -264,6 +264,7 @@ func AddTorrentFromFile(path string, file string) int {
 	return register(t)
 }
 
+//export AddTorrentFromBytes
 func AddTorrentFromBytes(path string, buf []byte) int {
 	var t *torrent.Torrent
 	var metaInfo *metainfo.MetaInfo
