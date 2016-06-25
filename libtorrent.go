@@ -652,7 +652,7 @@ func TorrentPiecesCompactCount(i int, size int) int {
 			}
 		}
 	}
-	if count >= size {
+	if count > 0 {
 		state := PieceEmpty
 		if checking {
 			state = PieceChecking
@@ -666,8 +666,6 @@ func TorrentPiecesCompactCount(i int, size int) int {
 			state = PieceEmpty
 		}
 		f.Pieces = append(f.Pieces, state)
-		state = PieceEmpty
-		count = 0
 	}
 	return len(f.Pieces)
 }
