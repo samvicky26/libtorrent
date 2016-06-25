@@ -634,7 +634,6 @@ func TorrentPiecesCompactCount(i int, size int) int {
 	pos := 0
 	for _, v := range t.PieceStateRuns() {
 		for i := 0; i < v.Length; i++ {
-			count = count + 1
 			if v.Complete {
 				complete = true
 			} else {
@@ -650,6 +649,8 @@ func TorrentPiecesCompactCount(i int, size int) int {
 			if v.Checking {
 				checking = true
 			}
+			count = count + 1
+
 			if count >= size {
 				state := PieceEmpty
 				if checking {
