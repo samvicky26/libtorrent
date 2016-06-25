@@ -631,7 +631,7 @@ func TorrentPiecesCompactCount(i int, size int) int {
 	checking := false
 	count := 0
 
-	for _, v := range t.PieceStateRuns() {
+	for k, v := range t.PieceStateRuns() {
 		for i := 0; i < v.Length; i++ {
 			count = count + 1
 			if v.Complete {
@@ -639,7 +639,7 @@ func TorrentPiecesCompactCount(i int, size int) int {
 			} else {
 				empty = true
 				// at least one pice pendend then mark all (size) pendent
-				if t.PiecePended(i) {
+				if t.PiecePended(k) {
 					pended = true
 				}
 			}
