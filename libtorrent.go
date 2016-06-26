@@ -517,7 +517,7 @@ func TorrentStatus(i int) int32 {
 	if client.ActiveTorrent(t) {
 		if t.Info() != nil {
 			// TODO t.Seeding() not working
-			if t.PendingBytesCompleted() == t.PendingBytesLength() {
+			if t.PendingBytesCompleted() >= t.PendingBytesLength() {
 				if t.Seeding() {
 					return StatusSeeding
 				}
