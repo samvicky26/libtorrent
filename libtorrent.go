@@ -583,12 +583,36 @@ func TorrentFilesCount(i int) int {
 
 	ff := t.Files()
 
+	info := t.Info()
+
 	for i, v := range ff {
 		p := File{}
 		p.Check = t.FileCheck(i)
 		p.Path = v.Path()
+		v.Offset()
 		p.Length = v.Length()
-		p.BytesCompleted = 0
+
+		b := int(v.Offset() / info.PieceLength)
+		e := int((v.Offset() + v.Length()) / info.PieceLength)
+
+		// mid length
+		var mid int64
+		// count middle (b,e)
+		for i := b + 1; i < e; i++ {
+			p.BytesCompleted += t.PieceBytesCompleted(i)
+			mid += t.PieceLength(i)
+		}
+		rest := v.Length() - mid
+		// b and e should be counted as 100% of rest, each have 50% value
+		value := t.PieceBytesCompleted(b)/t.PieceLength(b) + t.PieceBytesCompleted(e)/t.PieceLength(e)
+
+		// v:2 - rest/1
+		// v:1 - rest/2
+		// v:0 - rest*0
+		if value > 0 {
+			p.BytesCompleted += rest / (2 / value)
+		}
+
 		f.Files = append(f.Files, p)
 	}
 	return len(f.Files)
