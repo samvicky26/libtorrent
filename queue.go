@@ -93,8 +93,10 @@ func queueNext(t *torrent.Torrent) bool {
 		m := q[v]
 		if m.Info() == nil || m.PendingBytesCompleted() < m.PendingBytesLength() {
 			if startTorrent(m) {
-				stopTorrent(t)
-				queue[t] = now
+				if t != nil {
+					stopTorrent(t)
+					queue[t] = now
+				}
 				return true
 			}
 			// unable to start torrent, here no place to report an error. keep looping.
@@ -106,8 +108,10 @@ func queueNext(t *torrent.Torrent) bool {
 		m := q[v]
 		if m.Info() != nil && m.PendingBytesCompleted() >= m.PendingBytesLength() {
 			if startTorrent(m) {
-				stopTorrent(t)
-				queue[t] = now
+				if t != nil {
+					stopTorrent(t)
+					queue[t] = now
+				}
 				return true
 			}
 			// unable to start torrent, here no place to report an error. keep looping.

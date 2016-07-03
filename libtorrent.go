@@ -398,31 +398,39 @@ func startTorrent(t *torrent.Torrent) bool {
 			b1 := t.BytesCompleted()
 			select {
 			case <-time.After(timeout):
+				timeout = QueueTimeout
 				s := torrentStatus(t)
 				if s == StatusSeeding {
-					if queueNext(t) {
-						// we been moved to queue, going to catch t.Completed() soon
-						timeout = QueueTimeout
-					} else {
+					if !queueNext(t) {
 						// we not been removed
-						if len(queue) == 0 {
-							// queue empy. nobody here, wait normal
-							timeout = QueueTimeout
-						} else {
+						if len(queue) != 0 {
 							// queue full, some one soon be available, check every minute
 							timeout = 1 * time.Minute
 						}
 					}
 				}
 				if s == StatusDownloading {
+					// check stole progress, and rotate downloading
 					b2 := t.BytesCompleted()
 					if b1 == b2 {
-						// check stole progress, and rotate downloading
-						queueNext(t)
+						if !queueNext(t) {
+							// we not been removed
+							if len(queue) != 0 {
+								// queue full, some one soon be available, check every minute
+								timeout = 1 * time.Minute
+							}
+						}
 					}
 				}
 			case <-t.Completed():
-				queueNext(t)
+				timeout = QueueTimeout
+				if !queueNext(t) {
+					// we not been removed
+					if len(queue) != 0 {
+						// queue full, some one soon be available, check every minute
+						timeout = 1 * time.Minute
+					}
+				}
 			case <-t.Wait():
 				return
 			}
@@ -471,9 +479,7 @@ func InfoTorrent(i int) bool {
 func StopTorrent(i int) {
 	t := torrents[i]
 	stopTorrent(t)
-	if queueNext(t) {
-		delete(queue, t)
-	}
+	queueNext(nil)
 }
 
 func stopTorrent(t *torrent.Torrent) {
