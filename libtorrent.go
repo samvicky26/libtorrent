@@ -7,19 +7,15 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/metainfo"
-	"github.com/anacrolix/torrent/storage"
-	"github.com/syncthing/syncthing/lib/nat"
-	"github.com/syncthing/syncthing/lib/upnp"
-	"math/rand"
-	"net"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/storage"
 )
 
 var (
@@ -87,6 +83,7 @@ func ListenAddr() string {
 func Create() bool {
 	torrents = make(map[int]*torrent.Torrent)
 	filestorage = make(map[metainfo.Hash]*fileStorage)
+	queue = make(map[*torrent.Torrent]int64)
 	index = 0
 
 	clientConfig.DefaultStorage = &torrentOpener{}
@@ -100,6 +97,7 @@ func Create() bool {
 
 	clientAddr = client.ListenAddr().String()
 
+	// when create client do 1 second discovery
 	mapping(1 * time.Second)
 
 	err = client.Start()
@@ -114,6 +112,7 @@ func Create() bool {
 				return
 			case <-time.After(refreshPort):
 			}
+			// in go routine do 5 seconds discovery
 			mapping(5 * time.Second)
 		}
 	}()
@@ -366,6 +365,18 @@ func StartTorrent(i int) bool {
 		return true
 	}
 
+	if client.ActiveCount() >= ActiveCount {
+		// priority to start, seeding torrent will not start over downloading torrents
+		return queueStart(t)
+	}
+
+	return startTorrent(t)
+}
+
+func startTorrent(t *torrent.Torrent) bool {
+	// sanity check
+	delete(queue, t)
+
 	err = client.StartTorrent(t)
 	if err != nil {
 		return false
@@ -378,6 +389,44 @@ func StartTorrent(i int) bool {
 			return
 		}
 		t.FileUpdateCheck()
+	}()
+
+	// queue engine
+	go func() {
+		timeout := QueueTimeout
+		for {
+			b1 := t.BytesCompleted()
+			select {
+			case <-time.After(timeout):
+				s := torrentStatus(t)
+				if s == StatusSeeding {
+					if queueNext(t) {
+						// we been moved to queue, going to catch t.Completed() soon
+						timeout = QueueTimeout
+					} else {
+						// we not been removed
+						if len(queue) == 0 {
+							// queue empy. nobody here, wait normal
+							timeout = QueueTimeout
+						} else {
+							// queue full, some one soon be available, check every minute
+							timeout = 1 * time.Minute
+						}
+					}
+				}
+				if s == StatusDownloading {
+					b2 := t.BytesCompleted()
+					if b1 == b2 {
+						// check stole progress, and rotate downloading
+						queueNext(t)
+					}
+				}
+			case <-t.Completed():
+				queueNext(t)
+			case <-t.Wait():
+				return
+			}
+		}
 	}()
 
 	return true
@@ -405,7 +454,7 @@ func DownloadMetadata(i int) bool {
 			return
 		}
 		t.FileUpdateCheck()
-		StopTorrent(i)
+		stopTorrent(t)
 	}()
 
 	return true
@@ -421,10 +470,18 @@ func InfoTorrent(i int) bool {
 //export StopTorrent
 func StopTorrent(i int) {
 	t := torrents[i]
+	stopTorrent(t)
+	if queueNext(t) {
+		delete(queue, t)
+	}
+}
+
+func stopTorrent(t *torrent.Torrent) {
 	if client.ActiveTorrent(t) {
 		t.Drop()
 	} else {
 		t.Stop()
+		delete(queue, t)
 	}
 }
 
@@ -513,7 +570,10 @@ const (
 //export TorrentStatus
 func TorrentStatus(i int) int32 {
 	t := torrents[i]
+	return torrentStatus(t)
+}
 
+func torrentStatus(t *torrent.Torrent) int32 {
 	if client.ActiveTorrent(t) {
 		if t.Info() != nil {
 			// TODO t.Seeding() not working
@@ -527,6 +587,9 @@ func TorrentStatus(i int) int32 {
 	} else {
 		if t.Check() {
 			return StatusChecking
+		}
+		if _, ok := queue[t]; ok {
+			return StatusQueued
 		}
 		return StatusPaused
 	}
@@ -915,155 +978,4 @@ func unregister(i int) {
 	delete(filestorage, t.InfoHash())
 
 	delete(torrents, i)
-}
-
-var tcpPort string
-var udpPort string
-var refreshPort = 1 * time.Minute
-
-type PortInfo struct {
-	TCP string
-	UDP string
-}
-
-func PortMapping() *PortInfo {
-	return &PortInfo{tcpPort, udpPort}
-}
-
-func PortCheck() bool {
-	port := tcpPort
-	if port == "" {
-		// check does not perfome on UDP but what we can do?
-		port = udpPort
-	}
-	if port == "" {
-		// ports are not forwarded? using local socket port
-		_, port, err = net.SplitHostPort(clientAddr)
-		if err != nil {
-			return false
-		}
-	}
-	url := "http://portcheck.transmissionbt.com/" + port
-
-	var resp *http.Response
-	resp, err = http.Get(url)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
-	s := buf.String()
-
-	return s == "1"
-}
-
-func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, error) {
-	n := "libtorrent " + strings.ToLower(string(proto))
-
-	ext, err := net.LookupPort("tcp", extPort)
-	if err != nil || ext == 0 {
-		ext = port
-	}
-
-	// try specific port
-	p, err := d.AddPortMapping(proto, port, ext, n, 2*refreshPort)
-	if err == nil {
-		return p, nil
-	}
-
-	// try random port
-	p, err = d.AddPortMapping(proto, port, 0, n, 2*refreshPort)
-	if err == nil {
-		return p, nil
-	}
-
-	// try rand port
-	for i := 0; i < 10; i++ {
-		// Then try up to ten random ports.
-		extPort := 1024 + rand.Intn(65535-1024)
-
-		p, err = d.AddPortMapping(proto, port, extPort, n, 2*refreshPort)
-		if err == nil {
-			return p, nil
-		}
-	}
-
-	return 0, err
-}
-
-func mapping(timeout time.Duration) error {
-	_, pp, err := net.SplitHostPort(clientAddr)
-	if err != nil {
-		return err
-	}
-
-	localport, err := net.LookupPort("tcp", pp)
-	if err != nil {
-		return err
-	}
-
-	dd := upnp.Discover(timeout, timeout)
-
-	tcp := func(d nat.Device) error {
-		ext, err := d.GetExternalIPAddress()
-		if err != nil {
-			return err
-		}
-		p, err := getPort(d, nat.TCP, localport, tcpPort)
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		tcpPort = strconv.Itoa(p)
-		mu.Unlock()
-		client.SetListenTCPAddr(net.JoinHostPort(ext.String(), tcpPort))
-		return nil
-	}
-
-	udp := func(d nat.Device) error {
-		ext, err := d.GetExternalIPAddress()
-		if err != nil {
-			return err
-		}
-		p, err := getPort(d, nat.UDP, localport, udpPort)
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		udpPort = strconv.Itoa(p)
-		mu.Unlock()
-		client.SetListenUDPAddr(net.JoinHostPort(ext.String(), udpPort))
-		return nil
-	}
-
-	for _, d := range dd {
-		if tcp != nil {
-			if err := tcp(d); err == nil {
-				tcp = nil
-			}
-		}
-		if udp != nil {
-			if err := udp(d); err == nil {
-				udp = nil
-			}
-		}
-	}
-
-	if tcp != nil {
-		mu.Lock()
-		tcpPort = ""
-		mu.Unlock()
-		client.SetListenTCPAddr(clientAddr)
-	}
-
-	if udp != nil {
-		mu.Lock()
-		udpPort = ""
-		mu.Unlock()
-		client.SetListenUDPAddr(clientAddr)
-	}
-
-	return nil
 }
