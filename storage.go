@@ -69,6 +69,8 @@ type fileTorrentStorage struct {
 func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, error) {
 	fs := filestorage[info.Hash()]
 
+	os.MkdirAll(fs.Path, 0777)
+
 	return fileTorrentStorage{fs}, nil
 }
 
