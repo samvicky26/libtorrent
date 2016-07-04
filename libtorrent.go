@@ -158,6 +158,8 @@ func CreateTorrent(p string) int {
 		return -1
 	}
 
+	fileUpdateCheck(t)
+
 	return register(t)
 }
 
@@ -231,6 +233,8 @@ func AddTorrentFromURL(path string, url string) int {
 		return -1
 	}
 
+	fileUpdateCheck(t)
+
 	return register(t)
 }
 
@@ -268,6 +272,8 @@ func AddTorrentFromFile(path string, file string) int {
 		return -1
 	}
 
+	fileUpdateCheck(t)
+
 	return register(t)
 }
 
@@ -302,6 +308,8 @@ func AddTorrentFromBytes(path string, buf []byte) int {
 	if err != nil {
 		return -1
 	}
+
+	fileUpdateCheck(t)
 
 	return register(t)
 }
