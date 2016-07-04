@@ -15,7 +15,6 @@ import (
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/anacrolix/torrent/storage"
 )
 
 var (
@@ -53,21 +52,6 @@ func CreateTorrentFile(path string) []byte {
 		return nil
 	}
 	return b.Bytes()
-}
-
-type torrentOpener struct {
-}
-
-func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, error) {
-	var p string
-
-	if s, ok := filestorage[info.Hash()]; !ok {
-		p = clientConfig.DataDir
-	} else {
-		p = s.Path
-	}
-
-	return storage.NewFile(p).OpenTorrent(info)
 }
 
 //export ListenAddr
