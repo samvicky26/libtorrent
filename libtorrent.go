@@ -506,7 +506,7 @@ func DownloadMetadata(i int) bool {
 		fs.ActivateDate = now
 
 		fileUpdateCheck(t)
-		stopTorrent(t)
+		t.Drop()
 	}()
 
 	return true
