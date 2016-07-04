@@ -48,7 +48,7 @@ type fileStorage struct {
 	Comment   string
 }
 
-func CreateFileStorage(t *torrent.Torrent, path string) *fileStorage {
+func CreateFileStorage(path string) *fileStorage {
 	return &fileStorage{
 		t:         t,
 		AddedDate: time.Now().Unix(),

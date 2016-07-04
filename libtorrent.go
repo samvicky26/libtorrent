@@ -145,7 +145,7 @@ func CreateTorrent(p string) int {
 		return -1
 	}
 
-	fs := CreateFileStorage(t, path.Dir(p))
+	fs := CreateFileStorage(path.Dir(p))
 
 	fs.fillInfo(&mi.Info)
 
@@ -184,7 +184,7 @@ func AddMagnet(path string, magnet string) int {
 		return -1
 	}
 
-	filestorage[spec.InfoHash] = CreateFileStorage(t, path)
+	filestorage[spec.InfoHash] = CreateFileStorage(path)
 
 	t, _, err = client.AddTorrentSpec(spec)
 	if err != nil {
@@ -220,7 +220,7 @@ func AddTorrentFromURL(path string, url string) int {
 		return -1
 	}
 
-	fs := CreateFileStorage(t, path)
+	fs := CreateFileStorage(path)
 
 	fs.fillInfo(&mi.Info)
 
@@ -259,7 +259,7 @@ func AddTorrentFromFile(path string, file string) int {
 		return -1
 	}
 
-	fs := CreateFileStorage(t, path)
+	fs := CreateFileStorage(path)
 
 	fs.fillInfo(&mi.Info)
 
@@ -296,7 +296,7 @@ func AddTorrentFromBytes(path string, buf []byte) int {
 		return -1
 	}
 
-	fs := CreateFileStorage(t, path)
+	fs := CreateFileStorage(path)
 
 	fs.fillInfo(&mi.Info)
 
@@ -756,11 +756,15 @@ func register(t *torrent.Torrent) int {
 	mu.Lock()
 	defer mu.Unlock()
 
+	fs := filestorage[t.InfoHash()]
+
 	index++
 	for torrents[index] != nil {
 		index++
 	}
 	torrents[index] = t
+
+	fs.t = t
 
 	return index
 }
