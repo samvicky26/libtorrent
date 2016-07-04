@@ -54,6 +54,7 @@ func SaveTorrentState(t *torrent.Torrent) ([]byte, error) {
 			CreatedBy:    fs.Creator,
 			AnnounceList: t.AnnounceList(),
 		}
+		s.MetaInfo.Info = *t.Info()
 	} else {
 		hash := t.InfoHash()
 		s.InfoHash = &hash
@@ -86,7 +87,7 @@ func SaveTorrentState(t *torrent.Torrent) ([]byte, error) {
 	s.CreatedOn = fs.CreatedOn
 
 	if t.Info() != nil {
-		bf := make([]bool, fs.CompletedPieces.Len())
+		bf := make([]bool, t.Info().NumPieces())
 		fs.CompletedPieces.IterTyped(func(piece int) (again bool) {
 			bf[piece] = true
 			return true
@@ -100,7 +101,10 @@ func SaveTorrentState(t *torrent.Torrent) ([]byte, error) {
 // Load torrent from saved state
 func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	var s TorrentState
-	json.Unmarshal(buf, &s)
+	err = json.Unmarshal(buf, &s)
+	if err != nil {
+		return
+	}
 
 	var spec *torrent.TorrentSpec
 
@@ -125,7 +129,7 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 		t.SetDisplayName(spec.DisplayName)
 	}
 
-	fs := &fileStorage{Path: path}
+	fs := CreateFileStorage(t, path)
 	for i, b := range s.Pieces {
 		fs.CompletedPieces.Set(i, b)
 	}
@@ -134,9 +138,6 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	filestorage[spec.InfoHash] = fs
 
 	if spec.Info != nil {
-		if s.Pieces == nil {
-			s.Pieces = make([]bool, spec.Info.NumPieces())
-		}
 		err = t.LoadInfoBytes(spec.Info.Bytes)
 		if err != nil {
 			return
@@ -145,6 +146,7 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	}
 
 	if t.Info() != nil {
+		fs.fillInfo(t.Info())
 		fileUpdateCheck(t)
 	}
 

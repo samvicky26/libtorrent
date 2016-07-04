@@ -55,7 +55,7 @@ func CreateFileStorage(t *torrent.Torrent, path string) *fileStorage {
 		Path:      path,
 
 		Comment:   "dynamic metainfo from client",
-		Creator:   "go.torrent",
+		Creator:   "go.libtorrent",
 		CreatedOn: time.Now().Unix(),
 	}
 }
@@ -110,10 +110,9 @@ func (fs *fileStoragePiece) GetIsComplete() bool {
 func (fs *fileStoragePiece) MarkComplete() error {
 	fs.CompletedPieces.Set(fs.p.Index(), true)
 
-	if client.ActiveTorrent(fs.t) {
+	if !fs.t.Check() {
 		if fs.CompletedDate == 0 {
-			fb := filePendingBitmap(fs.t)
-			if pendingBytesCompleted(fs.t, fb) >= pendingBytesLength(fs.t, fb) {
+			if pendingCompleted(fs.t) {
 				now := time.Now().Unix()
 				fs.CompletedDate = now
 				fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)

@@ -708,19 +708,22 @@ func TorrentStats(i int) *StatsInfo {
 //export TorrentCreator
 func TorrentCreator(i int) string {
 	t := torrents[i]
-	return t.Metainfo().CreatedBy
+	fs := filestorage[t.InfoHash()]
+	return fs.Creator
 }
 
 //export TorrentCreateOn
 func TorrentCreateOn(i int) int64 {
 	t := torrents[i]
-	return t.Metainfo().CreationDate
+	fs := filestorage[t.InfoHash()]
+	return fs.CreatedOn
 }
 
 //export TorrentComment
 func TorrentComment(i int) string {
 	t := torrents[i]
-	return t.Metainfo().Comment
+	fs := filestorage[t.InfoHash()]
+	return fs.Comment
 }
 
 func TorrentDateAdded(i int) int64 {
