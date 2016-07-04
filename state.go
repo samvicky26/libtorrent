@@ -149,7 +149,9 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	}
 
 	if t.Info() != nil {
-		fs.fillInfo(t.Info())
+		if fs.Checks == nil {
+			fs.fillInfo(t.Info())
+		}
 		fileUpdateCheck(t)
 	}
 
