@@ -145,6 +145,8 @@ func CreateTorrent(p string) int {
 
 	fs := CreateFileStorage(t, path.Dir(p))
 
+	fs.fillInfo(&mi.Info)
+
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
 	fs.CreatedOn = mi.CreationDate
@@ -216,6 +218,8 @@ func AddTorrentFromURL(path string, url string) int {
 
 	fs := CreateFileStorage(t, path)
 
+	fs.fillInfo(&mi.Info)
+
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
 	fs.CreatedOn = mi.CreationDate
@@ -251,6 +255,8 @@ func AddTorrentFromFile(path string, file string) int {
 
 	fs := CreateFileStorage(t, path)
 
+	fs.fillInfo(&mi.Info)
+
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
 	fs.CreatedOn = mi.CreationDate
@@ -283,6 +289,8 @@ func AddTorrentFromBytes(path string, buf []byte) int {
 	}
 
 	fs := CreateFileStorage(t, path)
+
+	fs.fillInfo(&mi.Info)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
@@ -394,6 +402,10 @@ func startTorrent(t *torrent.Torrent) bool {
 			return
 		}
 
+		if fs.Checks == nil {
+			fs.fillInfo(t.Info())
+		}
+
 		now := time.Now().Unix()
 		fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
 		fs.ActivateDate = now
@@ -473,6 +485,10 @@ func DownloadMetadata(i int) bool {
 		case <-t.GotInfo():
 		case <-t.Wait():
 			return
+		}
+
+		if fs.Checks == nil {
+			fs.fillInfo(t.Info())
 		}
 
 		now := time.Now().Unix()

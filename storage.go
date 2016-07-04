@@ -18,13 +18,15 @@ var filestorage map[metainfo.Hash]*fileStorage
 type fileStorage struct {
 	t *torrent.Torrent
 
-	Path     string
+	Path string
+
+	// dynamic data
 	Trackers []Tracker
 	Pieces   []int32
 	Files    []File
-	Checks   []bool
 	Peers    []Peer
 
+	Checks          []bool
 	CompletedPieces bitmap.Bitmap
 
 	// date in seconds when torrent been StartTorrent, we measure this value to get downloadingTime && seedingTime

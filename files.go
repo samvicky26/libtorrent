@@ -5,6 +5,7 @@ import (
 
 	"github.com/anacrolix/missinggo/bitmap"
 	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 type File struct {
@@ -12,6 +13,13 @@ type File struct {
 	Path           string
 	Length         int64
 	BytesCompleted int64
+}
+
+func (m *fileStorage) fillInfo(info *metainfo.InfoEx) {
+	m.Checks = make([]bool, len(info.UpvertedFiles()))
+	for i, _ := range m.Checks {
+		m.Checks[i] = true
+	}
 }
 
 func TorrentFilesCount(i int) int {
@@ -68,6 +76,7 @@ func TorrentFilesCheck(i int, p int, b bool) {
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 
+	// update dynamic data
 	ff := fs.Files[p]
 	ff.Check = b
 
@@ -100,7 +109,7 @@ func fileUpdateCheck(t *torrent.Torrent) {
 		}
 	}
 
-	//t.pendingPieces.Clear()
+	t.CancelPieces(0, t.NumPieces())
 	t.UpdatePiecePriorities()
 
 	fb := filePendingBitmap(t)
