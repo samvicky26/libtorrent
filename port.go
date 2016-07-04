@@ -58,6 +58,11 @@ func PortCheck() bool {
 func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, error) {
 	n := "libtorrent " + strings.ToLower(string(proto))
 
+	_, ep, err := net.SplitHostPort(extPort)
+	if err == nil && ep != "" {
+		extPort = ep
+	}
+
 	ext, err := net.LookupPort("tcp", extPort)
 	if err != nil || ext == 0 {
 		ext = port
@@ -107,14 +112,19 @@ func mapping(timeout time.Duration) error {
 		if err != nil {
 			return err
 		}
-		p, err := getPort(d, nat.TCP, localport, tcpPort)
+		mu.Lock()
+		pp := tcpPort
+		if pp == "" {
+			pp = udpPort
+		}
+		mu.Unlock()
+		p, err := getPort(d, nat.TCP, localport, pp)
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		tcpPort = strconv.Itoa(p)
-		mu.Unlock()
-		client.SetListenTCPAddr(net.JoinHostPort(ext.String(), tcpPort))
+		defer mu.Unlock()
+		tcpPort = net.JoinHostPort(ext.String(), strconv.Itoa(p))
 		return nil
 	}
 
@@ -123,42 +133,63 @@ func mapping(timeout time.Duration) error {
 		if err != nil {
 			return err
 		}
-		p, err := getPort(d, nat.UDP, localport, udpPort)
+		mu.Lock()
+		pp := udpPort
+		if pp == "" {
+			pp = tcpPort
+		}
+		mu.Unlock()
+		p, err := getPort(d, nat.UDP, localport, pp)
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		udpPort = strconv.Itoa(p)
-		mu.Unlock()
-		client.SetListenUDPAddr(net.JoinHostPort(ext.String(), udpPort))
+		defer mu.Unlock()
+		udpPort = net.JoinHostPort(ext.String(), strconv.Itoa(p))
 		return nil
 	}
 
 	for _, d := range dd {
-		if tcp != nil {
-			if err := tcp(d); err == nil {
-				tcp = nil
-			}
-		}
 		if udp != nil {
 			if err := udp(d); err == nil {
 				udp = nil
 			}
 		}
+		if tcp != nil {
+			if err := tcp(d); err == nil {
+				tcp = nil
+			}
+		}
 	}
 
+	mu.Lock()
+	defer mu.Unlock()
+
 	if tcp != nil {
-		mu.Lock()
 		tcpPort = ""
-		mu.Unlock()
-		client.SetListenTCPAddr(clientAddr)
 	}
 
 	if udp != nil {
-		mu.Lock()
 		udpPort = ""
-		mu.Unlock()
-		client.SetListenUDPAddr(clientAddr)
+	}
+
+	// udp have priority we are using uTP
+	if udpPort == "" {
+		tcpPort = ""
+		client.SetListenAddr(clientAddr)
+		return nil
+	}
+
+	if tcpPort != udpPort {
+		// if we got different TCP port, reset it
+		tcpPort = ""
+		client.SetListenAddr(udpPort)
+		return nil
+	}
+
+	if tcpPort == udpPort {
+		client.SetListenAddr(udpPort)
+		return nil
 	}
 
 	return nil
