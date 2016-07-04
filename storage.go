@@ -6,22 +6,16 @@ import (
 	"path/filepath"
 
 	"github.com/anacrolix/missinggo"
+	"github.com/anacrolix/missinggo/bitmap"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 )
 
 type torrentOpener struct {
-	baseDir string
 }
 
-// File-based torrent storage, not yet bound to a Torrent.
 type fileTorrentStorage struct {
-	*torrentOpener
-}
-
-type fileStorageTorrent struct {
-	info    *metainfo.InfoEx
-	baseDir string
+	*torrentHandle
 }
 
 func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, error) {
@@ -33,42 +27,53 @@ func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, err
 		p = s.Path
 	}
 
-	m.baseDir = p
+	h := &torrentHandle{baseDir: p}
 
-	return fileTorrentStorage{m}, nil
+	return fileTorrentStorage{h}, nil
 }
 
-func (fs *torrentOpener) Piece(p metainfo.Piece) storage.Piece {
+type torrentHandle struct {
+	baseDir         string
+	completedPieces bitmap.Bitmap
+}
+
+type fileStorageTorrent struct {
+	info    *metainfo.InfoEx
+	baseDir string
+}
+
+func (m *torrentHandle) Piece(p metainfo.Piece) storage.Piece {
 	// Create a view onto the file-based torrent storage.
 	_io := &fileStorageTorrent{
 		p.Info,
-		fs.baseDir,
+		m.baseDir,
 	}
 	// Return the appropriate segments of this.
 	return &fileStoragePiece{
-		fs,
+		m,
 		p,
 		missinggo.NewSectionWriter(_io, p.Offset(), p.Length()),
 		io.NewSectionReader(_io, p.Offset(), p.Length()),
 	}
 }
 
-func (fs *torrentOpener) Close() error {
+func (fs *torrentHandle) Close() error {
 	return nil
 }
 
 type fileStoragePiece struct {
-	*torrentOpener
+	*torrentHandle
 	p metainfo.Piece
 	io.WriterAt
 	io.ReaderAt
 }
 
 func (fs *fileStoragePiece) GetIsComplete() bool {
-	return false
+	return fs.completedPieces.Get(fs.p.Index())
 }
 
 func (fs *fileStoragePiece) MarkComplete() error {
+	fs.completedPieces.Set(fs.p.Index(), true)
 	return nil
 }
 
