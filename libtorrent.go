@@ -17,6 +17,8 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 )
 
+var SocketsPerTorrent = 40
+
 var (
 	builtinAnnounceList = [][]string{
 		{"udp://tracker.openbittorrent.com:80"},
@@ -65,6 +67,8 @@ func ListenAddr() string {
 //
 //export Create
 func Create() bool {
+	torrent.SocketsPerTorrent = SocketsPerTorrent
+
 	torrents = make(map[int]*torrent.Torrent)
 	filestorage = make(map[metainfo.Hash]*fileStorage)
 	queue = make(map[*torrent.Torrent]int64)
