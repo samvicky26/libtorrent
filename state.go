@@ -118,6 +118,8 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 		spec = torrent.TorrentSpecFromMetaInfo(s.MetaInfo)
 	}
 
+	fs := CreateFileStorage(path)
+
 	var n bool
 	t, n = client.AddTorrentInfoHash(spec.InfoHash)
 	if !n {
@@ -129,7 +131,6 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 		t.SetDisplayName(spec.DisplayName)
 	}
 
-	fs := CreateFileStorage(t, path)
 	for i, b := range s.Pieces {
 		fs.CompletedPieces.Set(i, b)
 	}

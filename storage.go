@@ -50,7 +50,6 @@ type fileStorage struct {
 
 func CreateFileStorage(path string) *fileStorage {
 	return &fileStorage{
-		t:         t,
 		AddedDate: time.Now().Unix(),
 		Path:      path,
 
