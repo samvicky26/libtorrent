@@ -52,6 +52,7 @@ func CreateFileStorage(t *torrent.Torrent, path string) *fileStorage {
 	return &fileStorage{
 		t:         t,
 		AddedDate: time.Now().Unix(),
+		Path:      path,
 
 		Comment:   "dynamic metainfo from client",
 		Creator:   "go.torrent",
