@@ -17,6 +17,8 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 )
 
+var SocketsPerTorrent = 40
+
 var (
 	builtinAnnounceList = [][]string{
 		{"udp://tracker.openbittorrent.com:80"},
@@ -110,8 +112,8 @@ type BytesInfo struct {
 }
 
 func Stats() *BytesInfo {
-	d, u := client.Stats()
-	return &BytesInfo{d, u}
+	stats := client.Stats()
+	return &BytesInfo{stats.Downloaded, stats.Uploaded}
 }
 
 // Get Torrent Count
@@ -143,12 +145,22 @@ func CreateTorrent(p string) int {
 		return -1
 	}
 
-	filestorage[mi.Info.Hash()] = &fileStorage{Path: path.Dir(p)}
+	fs := CreateFileStorage(path.Dir(p))
+
+	fs.fillInfo(&mi.Info)
+
+	fs.Comment = mi.Comment
+	fs.Creator = mi.CreatedBy
+	fs.CreatedOn = mi.CreationDate
+
+	filestorage[mi.Info.Hash()] = fs
 
 	t, err = client.AddTorrent(mi)
 	if err != nil {
 		return -1
 	}
+
+	fileUpdateCheck(t)
 
 	return register(t)
 }
@@ -172,7 +184,7 @@ func AddMagnet(path string, magnet string) int {
 		return -1
 	}
 
-	filestorage[spec.InfoHash] = &fileStorage{Path: path}
+	filestorage[spec.InfoHash] = CreateFileStorage(path)
 
 	t, _, err = client.AddTorrentSpec(spec)
 	if err != nil {
@@ -189,7 +201,7 @@ func AddMagnet(path string, magnet string) int {
 //export AddTorrentFromURL
 func AddTorrentFromURL(path string, url string) int {
 	var t *torrent.Torrent
-	var metaInfo *metainfo.MetaInfo
+	var mi *metainfo.MetaInfo
 
 	var resp *http.Response
 	resp, err = http.Get(url)
@@ -198,22 +210,32 @@ func AddTorrentFromURL(path string, url string) int {
 	}
 	defer resp.Body.Close()
 
-	metaInfo, err = metainfo.Load(resp.Body)
+	mi, err = metainfo.Load(resp.Body)
 	if err != nil {
 		return -1
 	}
 
-	if _, ok := filestorage[metaInfo.Info.Hash()]; ok {
+	if _, ok := filestorage[mi.Info.Hash()]; ok {
 		err = errors.New("Already exists")
 		return -1
 	}
 
-	filestorage[metaInfo.Info.Hash()] = &fileStorage{Path: path}
+	fs := CreateFileStorage(path)
 
-	t, err = client.AddTorrent(metaInfo)
+	fs.fillInfo(&mi.Info)
+
+	fs.Comment = mi.Comment
+	fs.Creator = mi.CreatedBy
+	fs.CreatedOn = mi.CreationDate
+
+	filestorage[mi.Info.Hash()] = fs
+
+	t, err = client.AddTorrent(mi)
 	if err != nil {
 		return -1
 	}
+
+	fileUpdateCheck(t)
 
 	return register(t)
 }
@@ -225,24 +247,34 @@ func AddTorrentFromURL(path string, url string) int {
 //export AddTorrentFromFile
 func AddTorrentFromFile(path string, file string) int {
 	var t *torrent.Torrent
-	var metaInfo *metainfo.MetaInfo
+	var mi *metainfo.MetaInfo
 
-	metaInfo, err = metainfo.LoadFromFile(file)
+	mi, err = metainfo.LoadFromFile(file)
 	if err != nil {
 		return -1
 	}
 
-	if _, ok := filestorage[metaInfo.Info.Hash()]; ok {
+	if _, ok := filestorage[mi.Info.Hash()]; ok {
 		err = errors.New("Already exists")
 		return -1
 	}
 
-	filestorage[metaInfo.Info.Hash()] = &fileStorage{Path: path}
+	fs := CreateFileStorage(path)
 
-	t, err = client.AddTorrent(metaInfo)
+	fs.fillInfo(&mi.Info)
+
+	fs.Comment = mi.Comment
+	fs.Creator = mi.CreatedBy
+	fs.CreatedOn = mi.CreationDate
+
+	filestorage[mi.Info.Hash()] = fs
+
+	t, err = client.AddTorrent(mi)
 	if err != nil {
 		return -1
 	}
+
+	fileUpdateCheck(t)
 
 	return register(t)
 }
@@ -250,26 +282,36 @@ func AddTorrentFromFile(path string, file string) int {
 //export AddTorrentFromBytes
 func AddTorrentFromBytes(path string, buf []byte) int {
 	var t *torrent.Torrent
-	var metaInfo *metainfo.MetaInfo
+	var mi *metainfo.MetaInfo
 
 	r := bytes.NewReader(buf)
 
-	metaInfo, err = metainfo.Load(r)
+	mi, err = metainfo.Load(r)
 	if err != nil {
 		return -1
 	}
 
-	if _, ok := filestorage[metaInfo.Info.Hash()]; ok {
+	if _, ok := filestorage[mi.Info.Hash()]; ok {
 		err = errors.New("Already exists")
 		return -1
 	}
 
-	filestorage[metaInfo.Info.Hash()] = &fileStorage{Path: path}
+	fs := CreateFileStorage(path)
 
-	t, err = client.AddTorrent(metaInfo)
+	fs.fillInfo(&mi.Info)
+
+	fs.Comment = mi.Comment
+	fs.Creator = mi.CreatedBy
+	fs.CreatedOn = mi.CreationDate
+
+	filestorage[mi.Info.Hash()] = fs
+
+	t, err = client.AddTorrent(mi)
 	if err != nil {
 		return -1
 	}
+
+	fileUpdateCheck(t)
 
 	return register(t)
 }
@@ -307,7 +349,7 @@ func SaveTorrent(i int) []byte {
 
 	var buf []byte
 
-	buf, err = client.SaveTorrent(t)
+	buf, err = SaveTorrentState(t)
 	if err != nil {
 		return nil
 	}
@@ -323,16 +365,10 @@ func SaveTorrent(i int) []byte {
 func LoadTorrent(path string, buf []byte) int {
 	var t *torrent.Torrent
 
-	// will be read immidialtly within client.LoadTorrent call
-	clientConfig.DataDir = path
-
-	t, err = client.LoadTorrent(buf)
+	t, err = LoadTorrentState(path, buf)
 	if err != nil {
 		return -1
 	}
-
-	// prevent addind magnets/torrents with same hash
-	filestorage[t.InfoHash()] = &fileStorage{Path: path}
 
 	return register(t)
 }
@@ -358,7 +394,8 @@ func StartTorrent(i int) bool {
 }
 
 func startTorrent(t *torrent.Torrent) bool {
-	// sanity check
+	fs := filestorage[t.InfoHash()]
+
 	delete(queue, t)
 
 	err = client.StartTorrent(t)
@@ -366,23 +403,34 @@ func startTorrent(t *torrent.Torrent) bool {
 		return false
 	}
 
+	fs.ActivateDate = time.Now().Unix()
+
 	go func() {
 		select {
 		case <-t.GotInfo():
 		case <-t.Wait():
 			return
 		}
-		t.FileUpdateCheck()
+
+		if fs.Checks == nil {
+			fs.fillInfo(t.Info())
+		}
+
+		now := time.Now().Unix()
+		fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
+		fs.ActivateDate = now
+
+		fileUpdateCheck(t)
 	}()
 
 	// queue engine
 	go func() {
-		timeout := QueueTimeout
+		timeout := time.Duration(QueueTimeout) * time.Second
 		for {
 			b1 := t.BytesCompleted()
 			select {
 			case <-time.After(timeout):
-				timeout = QueueTimeout
+				timeout = time.Duration(QueueTimeout) * time.Second
 				s := torrentStatus(t)
 				if s == StatusSeeding {
 					if !queueNext(t) {
@@ -406,8 +454,8 @@ func startTorrent(t *torrent.Torrent) bool {
 						}
 					}
 				}
-			case <-t.Completed():
-				timeout = QueueTimeout
+			case <-fs.Completed.LockedChan(&mu):
+				timeout = time.Duration(QueueTimeout) * time.Second
 				if !queueNext(t) {
 					// we not been removed
 					if len(queue) != 0 {
@@ -429,6 +477,7 @@ func startTorrent(t *torrent.Torrent) bool {
 //export DownloadMetadata
 func DownloadMetadata(i int) bool {
 	t := torrents[i]
+	fs := filestorage[t.InfoHash()]
 
 	if client.ActiveTorrent(t) {
 		return true
@@ -439,14 +488,25 @@ func DownloadMetadata(i int) bool {
 		return false
 	}
 
+	fs.ActivateDate = time.Now().Unix()
+
 	go func() {
 		select {
 		case <-t.GotInfo():
 		case <-t.Wait():
 			return
 		}
-		t.FileUpdateCheck()
-		stopTorrent(t)
+
+		if fs.Checks == nil {
+			fs.fillInfo(t.Info())
+		}
+
+		now := time.Now().Unix()
+		fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
+		fs.ActivateDate = now
+
+		fileUpdateCheck(t)
+		t.Drop()
 	}()
 
 	return true
@@ -467,8 +527,17 @@ func StopTorrent(i int) {
 }
 
 func stopTorrent(t *torrent.Torrent) {
+	fs := filestorage[t.InfoHash()]
+
 	if client.ActiveTorrent(t) {
 		t.Drop()
+
+		now := time.Now().Unix()
+		if t.Seeding() {
+			fs.SeedingTime = fs.SeedingTime + (now - fs.ActivateDate)
+		} else {
+			fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
+		}
 	} else {
 		t.Stop()
 		delete(queue, t)
@@ -567,7 +636,7 @@ func torrentStatus(t *torrent.Torrent) int32 {
 	if client.ActiveTorrent(t) {
 		if t.Info() != nil {
 			// TODO t.Seeding() not working
-			if t.PendingBytesCompleted() >= t.PendingBytesLength() {
+			if pendingCompleted(t) {
 				if t.Seeding() {
 					return StatusSeeding
 				}
@@ -600,13 +669,15 @@ func TorrentBytesCompleted(i int) int64 {
 // Get total bytes for pending pieces list
 func TorrentPendingBytesLength(i int) int64 {
 	t := torrents[i]
-	return t.PendingBytesLength()
+	fb := filePendingBitmap(t)
+	return pendingBytesLength(t, fb)
 }
 
 // Get total bytes downloaded by pending pieces list
 func TorrentPendingBytesCompleted(i int) int64 {
 	t := torrents[i]
-	return t.PendingBytesCompleted()
+	fb := filePendingBitmap(t)
+	return pendingBytesCompleted(t, fb)
 }
 
 type StatsInfo struct {
@@ -618,331 +689,66 @@ type StatsInfo struct {
 
 func TorrentStats(i int) *StatsInfo {
 	t := torrents[i]
-	d, u, dd, ss := t.Stats()
-	return &StatsInfo{d, u, dd, ss}
-}
+	fs := filestorage[t.InfoHash()]
 
-type File struct {
-	Check          bool
-	Path           string
-	Length         int64
-	BytesCompleted int64
-}
+	stats := t.Stats()
+	downloading := fs.DownloadingTime
+	seeding := fs.SeedingTime
 
-func TorrentFilesCount(i int) int {
-	t := torrents[i]
-	f := filestorage[t.InfoHash()]
-	f.Files = nil
-
-	ff := t.Files()
-
-	info := t.Info()
-
-	for i, v := range ff {
-		p := File{}
-		p.Check = t.FileCheck(i)
-		p.Path = v.Path()
-		v.Offset()
-		p.Length = v.Length()
-
-		b := int(v.Offset() / info.PieceLength)
-		e := int((v.Offset() + v.Length()) / info.PieceLength)
-
-		// mid length
-		var mid int64
-		// count middle (b,e)
-		for i := b + 1; i < e; i++ {
-			p.BytesCompleted += t.PieceBytesCompleted(i)
-			mid += t.PieceLength(i)
-		}
-		rest := v.Length() - mid
-		// b and e should be counted as 100% of rest, each have 50% value
-		value := t.PieceBytesCompleted(b)/t.PieceLength(b) + t.PieceBytesCompleted(e)/t.PieceLength(e)
-
-		// v:2 - rest/1
-		// v:1 - rest/2
-		// v:0 - rest*0
-		if value > 0 {
-			p.BytesCompleted += rest / (2 / value)
-		}
-
-		f.Files = append(f.Files, p)
-	}
-	return len(f.Files)
-}
-
-// return torrent files array
-func TorrentFiles(i int, p int) *File {
-	t := torrents[i]
-	f := filestorage[t.InfoHash()]
-	return &f.Files[p]
-}
-
-func TorrentFilesCheck(i int, p int, b bool) {
-	t := torrents[i]
-
-	f := filestorage[t.InfoHash()]
-
-	ff := f.Files[p]
-	ff.Check = b
-
-	t.FileSetCheck(p, b)
-}
-
-type Peer struct {
-	Id     [20]byte
-	Name   string
-	Addr   string
-	Source string
-	// Peer is known to support encryption.
-	SupportsEncryption bool
-	PiecesCompleted    int
-	// how many data we downloaded/uploaded from peer
-	Downloaded int64
-	Uploaded   int64
-}
-
-const (
-	peerSourceTracker  = '\x00' // It's the default.
-	peerSourceIncoming = 'I'
-	peerSourceDHT      = 'H'
-	peerSourcePEX      = 'X'
-)
-
-func TorrentPeersCount(i int) int {
-	t := torrents[i]
-	f := filestorage[t.InfoHash()]
-
-	f.Peers = nil
-
-	for _, v := range t.Peers() {
-		var p string
-		switch v.Source {
-		case peerSourceTracker:
-			p = "Tracker"
-		case peerSourceIncoming:
-			p = "Incoming"
-		case peerSourceDHT:
-			p = "DHT"
-		case peerSourcePEX:
-			p = "PEX"
-		}
-		f.Peers = append(f.Peers, Peer{v.Id, v.Name, v.Addr, p, v.SupportsEncryption, v.PiecesCompleted, v.Downloaded, v.Uploaded})
-	}
-
-	return len(f.Peers) // t.PeersCount()
-}
-
-func TorrentPeers(i int, p int) *Peer {
-	t := torrents[i]
-	f := filestorage[t.InfoHash()]
-	return &f.Peers[p]
-}
-
-func TorrentPieceLength(i int) int64 {
-	t := torrents[i]
-	return t.Info().PieceLength
-}
-
-func TorrentPiecesCount(i int) int {
-	t := torrents[i]
-	return t.NumPieces()
-}
-
-const (
-	PieceEmpty    int32 = 0
-	PieceComplete int32 = 1
-	PieceChecking int32 = 2
-	PiecePartial  int32 = 3 // when booth empty and completed
-	PieceWriting  int32 = 4 // when have partial pieces
-	PieceUnpended int32 = 5 // empy pieces can be unpended
-)
-
-func TorrentPiecesCompactCount(i int, size int) int {
-	t := torrents[i]
-	f := filestorage[t.InfoHash()]
-	f.Pieces = nil
-
-	pended := false
-	empty := false
-	complete := false
-	partial := false
-	checking := false
-	count := 0
-
-	pos := 0
-	for _, v := range t.PieceStateRuns() {
-		for i := 0; i < v.Length; i++ {
-			if v.Complete {
-				complete = true
-			} else {
-				empty = true
-				// at least one pice pendend then mark all (size) pendent
-				if t.PiecePended(pos) {
-					pended = true
-				}
-			}
-			if v.Partial {
-				partial = true
-			}
-			if v.Checking {
-				checking = true
-			}
-			count = count + 1
-
-			if count >= size {
-				state := PieceEmpty
-				if checking {
-					state = PieceChecking
-				} else if partial {
-					state = PieceWriting
-				} else if empty && complete {
-					state = PiecePartial
-				} else if complete {
-					state = PieceComplete
-				} else if !pended {
-					state = PieceUnpended
-				} else {
-					state = PieceEmpty
-				}
-				f.Pieces = append(f.Pieces, state)
-
-				pended = false
-				empty = false
-				complete = false
-				partial = false
-				checking = false
-				count = 0
-			}
-			pos++
-		}
-	}
-	if count > 0 {
-		state := PieceEmpty
-		if checking {
-			state = PieceChecking
-		} else if partial {
-			state = PieceWriting
-		} else if empty && complete {
-			state = PiecePartial
-		} else if complete {
-			state = PieceComplete
-		} else if !pended {
-			state = PieceUnpended
+	if client.ActiveTorrent(t) {
+		now := time.Now().Unix()
+		if t.Seeding() {
+			seeding = seeding + (now - fs.ActivateDate)
 		} else {
-			state = PieceEmpty
+			downloading = downloading + (now - fs.ActivateDate)
 		}
-		f.Pieces = append(f.Pieces, state)
 	}
-	return len(f.Pieces)
-}
 
-func TorrentPiecesCompact(i int, p int) int32 {
-	t := torrents[i]
-	f := filestorage[t.InfoHash()]
-	return f.Pieces[p]
+	return &StatsInfo{stats.Downloaded, stats.Uploaded, downloading, seeding}
 }
 
 //export TorrentCreator
 func TorrentCreator(i int) string {
 	t := torrents[i]
-	return t.Metainfo().CreatedBy
+	fs := filestorage[t.InfoHash()]
+	return fs.Creator
 }
 
 //export TorrentCreateOn
 func TorrentCreateOn(i int) int64 {
 	t := torrents[i]
-	return t.Metainfo().CreationDate
+	fs := filestorage[t.InfoHash()]
+	return fs.CreatedOn
 }
 
 //export TorrentComment
 func TorrentComment(i int) string {
 	t := torrents[i]
-	return t.Metainfo().Comment
+	fs := filestorage[t.InfoHash()]
+	return fs.Comment
 }
 
 func TorrentDateAdded(i int) int64 {
 	t := torrents[i]
-	a, _ := t.Dates()
-	return a
+	fs := filestorage[t.InfoHash()]
+	return fs.AddedDate
 }
 
 func TorrentDateCompleted(i int) int64 {
 	t := torrents[i]
-	_, c := t.Dates()
-	return c
-}
-
-// TorrentFileRename
-//
-// To implement this we need to keep two Metainfo one for network operations,
-// and second for local file storage.
-//
-//export TorrentFileRename
-func TorrentFileRename(i int, f int, n string) {
-	panic("not implement")
-}
-
-type Tracker struct {
-	// Tracker URI or DHT, LSD, PE
-	Addr         string
-	Error        string
-	LastAnnounce int64
-	NextAnnounce int64
-	Peers        int
-
-	// scrape info
-	LastScrape int64
-	Seeders    int
-	Leechers   int
-	Downloaded int
-}
-
-func TorrentTrackersCount(i int) int {
-	t := torrents[i]
-	f := filestorage[t.InfoHash()]
-	f.Trackers = nil
-	for _, v := range t.Trackers() {
-		f.Trackers = append(f.Trackers, Tracker{v.Url, v.Err, v.LastAnnounce, v.NextAnnounce, v.Peers, 0, 0, 0, 0})
-	}
-	return len(f.Trackers)
-}
-
-func TorrentTrackers(i int, p int) *Tracker {
-	t := torrents[i]
-	f := filestorage[t.InfoHash()]
-	return &f.Trackers[p]
-}
-
-func TorrentTrackerRemove(i int, url string) {
-	t := torrents[i]
-	t.RemoveTracker(url)
-}
-
-func TorrentTrackerAdd(i int, addr string) {
-	t := torrents[i]
-	t.AddTrackers([][]string{[]string{addr}})
+	fs := filestorage[t.InfoHash()]
+	return fs.CompletedDate
 }
 
 //
 // protected
 //
 
-type fileStorage struct {
-	Path     string
-	Trackers []Tracker
-	Pieces   []int32
-	Files    []File
-	Checks   []bool
-	Peers    []Peer
-}
-
 var clientConfig torrent.Config
 var client *torrent.Client
 var clientAddr string
 var err error
 var torrents map[int]*torrent.Torrent
-var filestorage map[metainfo.Hash]*fileStorage
 var index int
 var mu sync.Mutex
 
@@ -950,11 +756,15 @@ func register(t *torrent.Torrent) int {
 	mu.Lock()
 	defer mu.Unlock()
 
+	fs := filestorage[t.InfoHash()]
+
 	index++
 	for torrents[index] != nil {
 		index++
 	}
 	torrents[index] = t
+
+	fs.t = t
 
 	return index
 }

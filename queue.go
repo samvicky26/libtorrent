@@ -8,7 +8,7 @@ import (
 )
 
 var ActiveCount = 3
-var QueueTimeout = 30 * time.Minute
+var QueueTimeout = int64((30 * time.Minute).Seconds())
 
 var queue map[*torrent.Torrent]int64
 
@@ -29,12 +29,12 @@ func queueStart(t *torrent.Torrent) bool {
 	}
 
 	// t is downloading?
-	if t.Info() == nil || t.PendingBytesCompleted() < t.PendingBytesLength() {
+	if t.Info() == nil || !pendingCompleted(t) {
 		// try to find seeding torrent
 		for _, m := range torrents {
 			if client.ActiveTorrent(m) {
 				// m is seeding?
-				if m.Info() != nil && m.PendingBytesCompleted() >= m.PendingBytesLength() {
+				if m.Info() != nil && pendingCompleted(m) {
 					stopTorrent(m)
 					queue[m] = time.Now().Unix()
 					return startTorrent(t)
@@ -53,7 +53,7 @@ func queueStart(t *torrent.Torrent) bool {
 		// try to find first seeding torrent
 		for _, m := range torrents {
 			if client.ActiveTorrent(m) {
-				if m.Info() != nil && m.PendingBytesCompleted() >= m.PendingBytesLength() {
+				if m.Info() != nil && pendingCompleted(m) {
 					stopTorrent(m)
 					queue[m] = time.Now().Unix()
 					return startTorrent(t)
@@ -78,7 +78,7 @@ func queueNext(t *torrent.Torrent) bool {
 		if client.ActiveCount() < ActiveCount { // queue all
 			q[v] = m
 			l = append(l, v)
-		} else if v+int64(QueueTimeout.Seconds()) <= now { // keep torrent resting for 30 mins
+		} else if v+QueueTimeout <= now { // keep torrent resting for 30 mins
 			// duplicates are lost
 			q[v] = m
 			l = append(l, v)
@@ -91,7 +91,8 @@ func queueNext(t *torrent.Torrent) bool {
 	// check for downloading queue torrents
 	for _, v := range l {
 		m := q[v]
-		if m.Info() == nil || m.PendingBytesCompleted() < m.PendingBytesLength() {
+
+		if m.Info() == nil || !pendingCompleted(m) {
 			if startTorrent(m) {
 				if t != nil {
 					stopTorrent(t)
@@ -106,7 +107,7 @@ func queueNext(t *torrent.Torrent) bool {
 	// check for seeding queue
 	for _, v := range l {
 		m := q[v]
-		if m.Info() != nil && m.PendingBytesCompleted() >= m.PendingBytesLength() {
+		if m.Info() != nil && pendingCompleted(m) {
 			if startTorrent(m) {
 				if t != nil {
 					stopTorrent(t)

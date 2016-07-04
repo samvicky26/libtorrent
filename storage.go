@@ -4,76 +4,123 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/bitmap"
+	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 )
+
+var filestorage map[metainfo.Hash]*fileStorage
+
+type fileStorage struct {
+	t *torrent.Torrent
+
+	Path string
+
+	// dynamic data
+	Trackers []Tracker
+	Pieces   []int32
+	Files    []File
+	Peers    []Peer
+
+	Checks          []bool
+	CompletedPieces bitmap.Bitmap
+
+	// date in seconds when torrent been StartTorrent, we measure this value to get downloadingTime && seedingTime
+	ActivateDate int64
+
+	// elapsed in seconds
+	DownloadingTime int64
+	SeedingTime     int64
+
+	// dates in seconds
+	AddedDate     int64
+	CompletedDate int64
+	// fired when torrent downloaded
+	Completed missinggo.Event
+
+	// .torrent info
+	Creator   string
+	CreatedOn int64
+	Comment   string
+}
+
+func CreateFileStorage(path string) *fileStorage {
+	return &fileStorage{
+		AddedDate: time.Now().Unix(),
+		Path:      path,
+
+		Comment:   "dynamic metainfo from client",
+		Creator:   "go.libtorrent",
+		CreatedOn: time.Now().Unix(),
+	}
+}
 
 type torrentOpener struct {
 }
 
 type fileTorrentStorage struct {
-	*torrentHandle
+	fs *fileStorage
 }
 
 func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, error) {
-	var p string
-
-	if s, ok := filestorage[info.Hash()]; !ok {
-		p = clientConfig.DataDir
-	} else {
-		p = s.Path
-	}
-
-	h := &torrentHandle{baseDir: p}
-
-	return fileTorrentStorage{h}, nil
-}
-
-type torrentHandle struct {
-	baseDir         string
-	completedPieces bitmap.Bitmap
+	fs := filestorage[info.Hash()]
+	return fileTorrentStorage{fs}, nil
 }
 
 type fileStorageTorrent struct {
-	info    *metainfo.InfoEx
-	baseDir string
+	info *metainfo.InfoEx
+	fs   *fileStorage
 }
 
-func (m *torrentHandle) Piece(p metainfo.Piece) storage.Piece {
+func (m fileTorrentStorage) Piece(p metainfo.Piece) storage.Piece {
 	// Create a view onto the file-based torrent storage.
 	_io := &fileStorageTorrent{
 		p.Info,
-		m.baseDir,
+		m.fs,
 	}
 	// Return the appropriate segments of this.
 	return &fileStoragePiece{
-		m,
+		m.fs,
 		p,
 		missinggo.NewSectionWriter(_io, p.Offset(), p.Length()),
 		io.NewSectionReader(_io, p.Offset(), p.Length()),
 	}
 }
 
-func (fs *torrentHandle) Close() error {
+func (fs fileTorrentStorage) Close() error {
 	return nil
 }
 
 type fileStoragePiece struct {
-	*torrentHandle
+	*fileStorage
 	p metainfo.Piece
 	io.WriterAt
 	io.ReaderAt
 }
 
 func (fs *fileStoragePiece) GetIsComplete() bool {
-	return fs.completedPieces.Get(fs.p.Index())
+	return fs.CompletedPieces.Get(fs.p.Index())
 }
 
 func (fs *fileStoragePiece) MarkComplete() error {
-	fs.completedPieces.Set(fs.p.Index(), true)
+	fs.CompletedPieces.Set(fs.p.Index(), true)
+
+	if !fs.t.Check() {
+		if fs.CompletedDate == 0 {
+			if pendingCompleted(fs.t) {
+				now := time.Now().Unix()
+				fs.CompletedDate = now
+				fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
+				fs.ActivateDate = now // seeding time now
+				fs.Completed.Set()
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -168,5 +215,5 @@ func (fst *fileStorageTorrent) WriteAt(p []byte, off int64) (n int, err error) {
 }
 
 func (fst *fileStorageTorrent) fileInfoName(fi metainfo.FileInfo) string {
-	return filepath.Join(append([]string{fst.baseDir, fst.info.Name}, fi.Path...)...)
+	return filepath.Join(append([]string{fst.fs.Path, fst.info.Name}, fi.Path...)...)
 }
