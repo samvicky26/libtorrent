@@ -423,12 +423,12 @@ func startTorrent(t *torrent.Torrent) bool {
 
 	// queue engine
 	go func() {
-		timeout := QueueTimeout
+		timeout := time.Duration(QueueTimeout) * time.Second
 		for {
 			b1 := t.BytesCompleted()
 			select {
 			case <-time.After(timeout):
-				timeout = QueueTimeout
+				timeout = time.Duration(QueueTimeout) * time.Second
 				s := torrentStatus(t)
 				if s == StatusSeeding {
 					if !queueNext(t) {
@@ -453,7 +453,7 @@ func startTorrent(t *torrent.Torrent) bool {
 					}
 				}
 			case <-fs.Completed.LockedChan(&mu):
-				timeout = QueueTimeout
+				timeout = time.Duration(QueueTimeout) * time.Second
 				if !queueNext(t) {
 					// we not been removed
 					if len(queue) != 0 {

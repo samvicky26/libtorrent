@@ -8,7 +8,7 @@ import (
 )
 
 var ActiveCount = 3
-var QueueTimeout = 30 * time.Minute
+var QueueTimeout = int64((30 * time.Minute).Seconds())
 
 var queue map[*torrent.Torrent]int64
 
@@ -78,7 +78,7 @@ func queueNext(t *torrent.Torrent) bool {
 		if client.ActiveCount() < ActiveCount { // queue all
 			q[v] = m
 			l = append(l, v)
-		} else if v+int64(QueueTimeout.Seconds()) <= now { // keep torrent resting for 30 mins
+		} else if v+QueueTimeout <= now { // keep torrent resting for 30 mins
 			// duplicates are lost
 			q[v] = m
 			l = append(l, v)
