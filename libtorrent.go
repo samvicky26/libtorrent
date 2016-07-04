@@ -112,8 +112,8 @@ type BytesInfo struct {
 }
 
 func Stats() *BytesInfo {
-	d, u := client.Stats()
-	return &BytesInfo{d, u}
+	stats := client.Stats()
+	return &BytesInfo{stats.Downloaded, stats.Uploaded}
 }
 
 // Get Torrent Count
@@ -691,7 +691,7 @@ func TorrentStats(i int) *StatsInfo {
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 
-	downloaded, uploaded := t.Stats()
+	stats := t.Stats()
 	downloading := fs.DownloadingTime
 	seeding := fs.SeedingTime
 
@@ -704,7 +704,7 @@ func TorrentStats(i int) *StatsInfo {
 		}
 	}
 
-	return &StatsInfo{downloaded, uploaded, downloading, seeding}
+	return &StatsInfo{stats.Downloaded, stats.Uploaded, downloading, seeding}
 }
 
 //export TorrentCreator

@@ -72,7 +72,9 @@ func SaveTorrentState(t *torrent.Torrent) ([]byte, error) {
 		fs.ActivateDate = now
 	}
 
-	s.Downloaded, s.Uploaded = t.Stats()
+	stats := t.Stats()
+	s.Downloaded = stats.Downloaded
+	s.Uploaded = stats.Uploaded
 
 	s.Checks = fs.Checks
 
@@ -156,7 +158,7 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	}
 	t.AddTrackers(spec.Trackers)
 
-	t.SetStats(s.Downloaded, s.Uploaded)
+	t.SetStats(torrent.TorrentStats{Downloaded: s.Downloaded, Uploaded: s.Uploaded})
 
 	fs.DownloadingTime = s.DownloadingTime
 	fs.SeedingTime = s.SeedingTime
