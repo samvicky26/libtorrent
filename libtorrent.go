@@ -17,8 +17,6 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 )
 
-var SocketsPerTorrent = 40
-
 var (
 	builtinAnnounceList = [][]string{
 		{"udp://tracker.openbittorrent.com:80"},
@@ -54,11 +52,6 @@ func CreateTorrentFile(path string) []byte {
 		return nil
 	}
 	return b.Bytes()
-}
-
-//export ListenAddr
-func ListenAddr() string {
-	return client.ListenAddr().String()
 }
 
 // Create
@@ -123,6 +116,11 @@ func Count() int {
 	return len(torrents)
 }
 
+//export ListenAddr
+func ListenAddr() string {
+	return client.ListenAddr().String()
+}
+
 //export CreateTorrent
 func CreateTorrent(p string) int {
 	var t *torrent.Torrent
@@ -145,9 +143,9 @@ func CreateTorrent(p string) int {
 		return -1
 	}
 
-	fs := CreateFileStorage(path.Dir(p))
+	fs := createFileStorage(path.Dir(p))
 
-	fs.fillInfo(&mi.Info)
+	fillFilesInfo(&mi.Info, fs)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
@@ -184,7 +182,7 @@ func AddMagnet(path string, magnet string) int {
 		return -1
 	}
 
-	filestorage[spec.InfoHash] = CreateFileStorage(path)
+	filestorage[spec.InfoHash] = createFileStorage(path)
 
 	t, _, err = client.AddTorrentSpec(spec)
 	if err != nil {
@@ -220,9 +218,9 @@ func AddTorrentFromURL(path string, url string) int {
 		return -1
 	}
 
-	fs := CreateFileStorage(path)
+	fs := createFileStorage(path)
 
-	fs.fillInfo(&mi.Info)
+	fillFilesInfo(&mi.Info, fs)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
@@ -259,9 +257,9 @@ func AddTorrentFromFile(path string, file string) int {
 		return -1
 	}
 
-	fs := CreateFileStorage(path)
+	fs := createFileStorage(path)
 
-	fs.fillInfo(&mi.Info)
+	fillFilesInfo(&mi.Info, fs)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
@@ -296,9 +294,9 @@ func AddTorrentFromBytes(path string, buf []byte) int {
 		return -1
 	}
 
-	fs := CreateFileStorage(path)
+	fs := createFileStorage(path)
 
-	fs.fillInfo(&mi.Info)
+	fillFilesInfo(&mi.Info, fs)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
@@ -333,44 +331,6 @@ func GetTorrent(i int) []byte {
 		return nil
 	}
 	return buf.Bytes()
-}
-
-// SaveTorrent
-//
-// Every torrent application restarts it require to check files consistency. To
-// avoid this, and save machine time we need to store torrents runtime states
-// completed pieces and other information externaly.
-//
-// Save runtime torrent data to state file
-//
-//export SaveTorrent
-func SaveTorrent(i int) []byte {
-	t := torrents[i]
-
-	var buf []byte
-
-	buf, err = SaveTorrentState(t)
-	if err != nil {
-		return nil
-	}
-
-	return buf
-}
-
-// LoadTorrent
-//
-// Load runtime torrent data from saved state file
-//
-//export LoadTorrent
-func LoadTorrent(path string, buf []byte) int {
-	var t *torrent.Torrent
-
-	t, err = LoadTorrentState(path, buf)
-	if err != nil {
-		return -1
-	}
-
-	return register(t)
 }
 
 // Separate load / create torrent from network activity.
@@ -413,7 +373,7 @@ func startTorrent(t *torrent.Torrent) bool {
 		}
 
 		if fs.Checks == nil {
-			fs.fillInfo(t.Info())
+			fillFilesInfo(t.Info(), fs)
 		}
 
 		now := time.Now().Unix()
@@ -442,7 +402,7 @@ func startTorrent(t *torrent.Torrent) bool {
 					}
 				}
 				if s == StatusDownloading {
-					// check stole progress, and rotate downloading
+					// check stalled, and rotate if it does
 					b2 := t.BytesCompleted()
 					if b1 == b2 {
 						if !queueNext(t) {
@@ -498,7 +458,7 @@ func DownloadMetadata(i int) bool {
 		}
 
 		if fs.Checks == nil {
-			fs.fillInfo(t.Info())
+			fillFilesInfo(t.Info(), fs)
 		}
 
 		now := time.Now().Unix()
@@ -512,7 +472,7 @@ func DownloadMetadata(i int) bool {
 	return true
 }
 
-func InfoTorrent(i int) bool {
+func MetaTorrent(i int) bool {
 	t := torrents[i]
 	return t.Info() != nil
 }
@@ -580,164 +540,6 @@ func Close() {
 		client.Close()
 		client = nil
 	}
-}
-
-//
-// Torrent* methods
-//
-
-// Get Magnet from runtime torrent.
-//
-//export TorrentMagnet
-func TorrentMagnet(i int) string {
-	t := torrents[i]
-	return t.Metainfo().Magnet().String()
-}
-
-func TorrentMetainfo(i int) *metainfo.MetaInfo {
-	t := torrents[i]
-	return t.Metainfo()
-}
-
-//export TorrentHash
-func TorrentHash(i int) string {
-	t := torrents[i]
-	h := t.InfoHash()
-	return h.HexString()
-}
-
-//export TorrentName
-func TorrentName(i int) string {
-	t := torrents[i]
-	return t.Name()
-}
-
-//export TorrentActive
-func TorrentActive(i int) bool {
-	t := torrents[i]
-	return client.ActiveTorrent(t)
-}
-
-const (
-	StatusPaused      int32 = 0
-	StatusDownloading int32 = 1
-	StatusSeeding     int32 = 2
-	StatusChecking    int32 = 3
-	StatusQueued      int32 = 4
-)
-
-//export TorrentStatus
-func TorrentStatus(i int) int32 {
-	t := torrents[i]
-	return torrentStatus(t)
-}
-
-func torrentStatus(t *torrent.Torrent) int32 {
-	if client.ActiveTorrent(t) {
-		if t.Info() != nil {
-			// TODO t.Seeding() not working
-			if pendingCompleted(t) {
-				if t.Seeding() {
-					return StatusSeeding
-				}
-			}
-		}
-		return StatusDownloading
-	} else {
-		if t.Check() {
-			return StatusChecking
-		}
-		if _, ok := queue[t]; ok {
-			return StatusQueued
-		}
-		return StatusPaused
-	}
-}
-
-//export TorrentBytesLength
-func TorrentBytesLength(i int) int64 {
-	t := torrents[i]
-	return t.Length()
-}
-
-//export TorrentBytesCompleted
-func TorrentBytesCompleted(i int) int64 {
-	t := torrents[i]
-	return t.BytesCompleted()
-}
-
-// Get total bytes for pending pieces list
-func TorrentPendingBytesLength(i int) int64 {
-	t := torrents[i]
-	fb := filePendingBitmap(t)
-	return pendingBytesLength(t, fb)
-}
-
-// Get total bytes downloaded by pending pieces list
-func TorrentPendingBytesCompleted(i int) int64 {
-	t := torrents[i]
-	fb := filePendingBitmap(t)
-	return pendingBytesCompleted(t, fb)
-}
-
-type StatsInfo struct {
-	Downloaded  int64
-	Uploaded    int64
-	Downloading int64
-	Seeding     int64
-}
-
-func TorrentStats(i int) *StatsInfo {
-	t := torrents[i]
-	fs := filestorage[t.InfoHash()]
-
-	stats := t.Stats()
-	downloading := fs.DownloadingTime
-	seeding := fs.SeedingTime
-
-	if client.ActiveTorrent(t) {
-		now := time.Now().Unix()
-		if t.Seeding() {
-			seeding = seeding + (now - fs.ActivateDate)
-		} else {
-			downloading = downloading + (now - fs.ActivateDate)
-		}
-	}
-
-	return &StatsInfo{stats.Downloaded, stats.Uploaded, downloading, seeding}
-}
-
-//export TorrentCreator
-func TorrentCreator(i int) string {
-	t := torrents[i]
-	fs := filestorage[t.InfoHash()]
-	return fs.Creator
-}
-
-//export TorrentCreateOn
-func TorrentCreateOn(i int) int64 {
-	t := torrents[i]
-	fs := filestorage[t.InfoHash()]
-	return fs.CreatedOn
-}
-
-//export TorrentComment
-func TorrentComment(i int) string {
-	t := torrents[i]
-	fs := filestorage[t.InfoHash()]
-	return fs.Comment
-}
-
-func TorrentDateAdded(i int) int64 {
-	t := torrents[i]
-	fs := filestorage[t.InfoHash()]
-	return fs.AddedDate
-}
-
-func TorrentDateCompleted(i int) int64 {
-	t := torrents[i]
-	fs := filestorage[t.InfoHash()]
-	return fs.CompletedDate
 }
 
 //

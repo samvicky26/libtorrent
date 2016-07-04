@@ -15,7 +15,7 @@ type File struct {
 	BytesCompleted int64
 }
 
-func (m *fileStorage) fillInfo(info *metainfo.InfoEx) {
+func fillFilesInfo(info *metainfo.InfoEx, m *fileStorage) {
 	m.Checks = make([]bool, len(info.UpvertedFiles()))
 	for i, _ := range m.Checks {
 		m.Checks[i] = true

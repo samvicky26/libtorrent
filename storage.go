@@ -48,7 +48,7 @@ type fileStorage struct {
 	Comment   string
 }
 
-func CreateFileStorage(path string) *fileStorage {
+func createFileStorage(path string) *fileStorage {
 	return &fileStorage{
 		AddedDate: time.Now().Unix(),
 		Path:      path,

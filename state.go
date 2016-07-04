@@ -10,6 +10,44 @@ import (
 	pp "github.com/anacrolix/torrent/peer_protocol"
 )
 
+// SaveTorrent
+//
+// Every torrent application restarts it require to check files consistency. To
+// avoid this, and save machine time we need to store torrents runtime states
+// completed pieces and other information externaly.
+//
+// Save runtime torrent data to state file
+//
+//export SaveTorrent
+func SaveTorrent(i int) []byte {
+	t := torrents[i]
+
+	var buf []byte
+
+	buf, err = SaveTorrentState(t)
+	if err != nil {
+		return nil
+	}
+
+	return buf
+}
+
+// LoadTorrent
+//
+// Load runtime torrent data from saved state file
+//
+//export LoadTorrent
+func LoadTorrent(path string, buf []byte) int {
+	var t *torrent.Torrent
+
+	t, err = LoadTorrentState(path, buf)
+	if err != nil {
+		return -1
+	}
+
+	return register(t)
+}
+
 type TorrentState struct {
 	Version int `json:"version"`
 
@@ -120,7 +158,7 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 		spec = torrent.TorrentSpecFromMetaInfo(s.MetaInfo)
 	}
 
-	fs := CreateFileStorage(path)
+	fs := createFileStorage(path)
 
 	var n bool
 	t, n = client.AddTorrentInfoHash(spec.InfoHash)
@@ -150,7 +188,7 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 
 	if t.Info() != nil {
 		if fs.Checks == nil {
-			fs.fillInfo(t.Info())
+			fillFilesInfo(t.Info(), fs)
 		}
 		fileUpdateCheck(t)
 	}

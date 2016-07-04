@@ -119,6 +119,22 @@ func queueNext(t *torrent.Torrent) bool {
 		}
 	}
 
+	if t != nil {
+		// is 't' seeding torrent? if here any downloading, queue it, regardless on timeout
+		if pendingCompleted(t) {
+			for m := range queue {
+				if m.Info() != nil && !pendingCompleted(m) {
+					if startTorrent(m) {
+						stopTorrent(t)
+						queue[t] = now
+						return true
+					}
+					// unable to start torrent, here no place to report an error. keep looping.
+				}
+			}
+		}
+	}
+
 	// queue is empty, change nothing
 	return false
 }
