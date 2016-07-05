@@ -28,36 +28,49 @@ func queueStart(t *torrent.Torrent) bool {
 		return startTorrent(t)
 	}
 
+	// build active torrent array with activate time
+	q := make(map[int64]*torrent.Torrent)
+	var l []int64
+
+	for _, m := range torrents {
+		if client.ActiveTorrent(m) {
+			fs := filestorage[m.InfoHash()]
+			v := fs.ActivateDate
+			q[v] = m
+			l = append(l, v)
+		}
+	}
+
+	// older torrent will be removed first
+	sort.Sort(Int64Slice(l))
+
 	// t is downloading?
 	if t.Info() == nil || !pendingCompleted(t) {
 		// try to find seeding torrent
-		for _, m := range torrents {
-			if client.ActiveTorrent(m) {
-				// m is seeding?
-				if m.Info() != nil && pendingCompleted(m) {
-					stopTorrent(m)
-					queue[m] = time.Now().Unix()
-					return startTorrent(t)
-				}
-			}
-		}
-		// ok all torrents are downloading, remove first downloading torrent
-		for _, m := range torrents {
-			if client.ActiveTorrent(m) {
+		for _, v := range l {
+			m := q[v]
+			// m is seeding?
+			if m.Info() != nil && pendingCompleted(m) {
 				stopTorrent(m)
 				queue[m] = time.Now().Unix()
 				return startTorrent(t)
 			}
 		}
+		// ok all torrents are downloading, remove first downloading torrent
+		for _, v := range l {
+			m := q[v]
+			stopTorrent(m)
+			queue[m] = time.Now().Unix()
+			return startTorrent(t)
+		}
 	} else {
 		// try to find first seeding torrent
-		for _, m := range torrents {
-			if client.ActiveTorrent(m) {
-				if m.Info() != nil && pendingCompleted(m) {
-					stopTorrent(m)
-					queue[m] = time.Now().Unix()
-					return startTorrent(t)
-				}
+		for _, v := range l {
+			m := q[v]
+			if m.Info() != nil && pendingCompleted(m) {
+				stopTorrent(m)
+				queue[m] = time.Now().Unix()
+				return startTorrent(t)
 			}
 		}
 	}
@@ -121,8 +134,9 @@ func queueNext(t *torrent.Torrent) bool {
 
 	if t != nil {
 		// is 't' seeding torrent? if here any downloading, queue it, regardless on timeout
-		if pendingCompleted(t) {
+		if t.Info() != nil && pendingCompleted(t) {
 			for m := range queue {
+				// m - downloading in queue?
 				if m.Info() != nil && !pendingCompleted(m) {
 					if startTorrent(m) {
 						stopTorrent(t)

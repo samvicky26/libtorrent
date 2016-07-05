@@ -393,7 +393,10 @@ func startTorrent(t *torrent.Torrent) bool {
 				timeout = time.Duration(QueueTimeout) * time.Second
 				s := torrentStatus(t)
 				if s == StatusSeeding {
-					if !queueNext(t) {
+					if queueNext(t) {
+						// we been removed, stop queue engine
+						return
+					} else {
 						// we not been removed
 						if len(queue) != 0 {
 							// queue full, some one soon be available, check every minute
@@ -405,7 +408,10 @@ func startTorrent(t *torrent.Torrent) bool {
 					// check stalled, and rotate if it does
 					b2 := t.BytesCompleted()
 					if b1 == b2 {
-						if !queueNext(t) {
+						if queueNext(t) {
+							// we been removed, stop queue engine
+							return
+						} else {
 							// we not been removed
 							if len(queue) != 0 {
 								// queue full, some one soon be available, check every minute
@@ -416,7 +422,10 @@ func startTorrent(t *torrent.Torrent) bool {
 				}
 			case <-fs.Completed.LockedChan(&mu):
 				timeout = time.Duration(QueueTimeout) * time.Second
-				if !queueNext(t) {
+				if queueNext(t) {
+					// we been removed, stop queue engine
+					return
+				} else {
 					// we not been removed
 					if len(queue) != 0 {
 						// queue full, some one soon be available, check every minute
