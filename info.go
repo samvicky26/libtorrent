@@ -11,17 +11,26 @@ import (
 //
 //export TorrentMagnet
 func TorrentMagnet(i int) string {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	return t.Metainfo().Magnet().String()
 }
 
 func TorrentMetainfo(i int) *metainfo.MetaInfo {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	return t.Metainfo()
 }
 
 //export TorrentHash
 func TorrentHash(i int) string {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	h := t.InfoHash()
 	return h.HexString()
@@ -29,12 +38,18 @@ func TorrentHash(i int) string {
 
 //export TorrentName
 func TorrentName(i int) string {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	return t.Name()
 }
 
 //export TorrentActive
 func TorrentActive(i int) bool {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	return client.ActiveTorrent(t)
 }
@@ -49,6 +64,9 @@ const (
 
 //export TorrentStatus
 func TorrentStatus(i int) int32 {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	return torrentStatus(t)
 }
@@ -77,18 +95,27 @@ func torrentStatus(t *torrent.Torrent) int32 {
 
 //export TorrentBytesLength
 func TorrentBytesLength(i int) int64 {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	return t.Length()
 }
 
 //export TorrentBytesCompleted
 func TorrentBytesCompleted(i int) int64 {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	return t.BytesCompleted()
 }
 
 // Get total bytes for pending pieces list
 func TorrentPendingBytesLength(i int) int64 {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fb := filePendingBitmap(t)
 	return pendingBytesLength(t, fb)
@@ -96,6 +123,9 @@ func TorrentPendingBytesLength(i int) int64 {
 
 // Get total bytes downloaded by pending pieces list
 func TorrentPendingBytesCompleted(i int) int64 {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fb := filePendingBitmap(t)
 	return pendingBytesCompleted(t, fb)
@@ -109,6 +139,9 @@ type StatsTorrent struct {
 }
 
 func TorrentStats(i int) *StatsTorrent {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 
@@ -137,6 +170,9 @@ type InfoTorrent struct {
 }
 
 func TorrentInfo(i int) *InfoTorrent {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 	return &InfoTorrent{fs.Creator, fs.CreatedOn, fs.Comment, fs.AddedDate, fs.CompletedDate}

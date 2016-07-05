@@ -23,6 +23,9 @@ func fillFilesInfo(info *metainfo.InfoEx, m *fileStorage) {
 }
 
 func TorrentFilesCount(i int) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 
@@ -31,6 +34,10 @@ func TorrentFilesCount(i int) int {
 	ff := t.Files()
 
 	info := t.Info()
+
+	if fs.Checks == nil {
+		fillFilesInfo(info, fs)
+	}
 
 	for i, v := range ff {
 		p := File{}
@@ -67,18 +74,28 @@ func TorrentFilesCount(i int) int {
 
 // return torrent files array
 func TorrentFiles(i int, p int) *File {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 	return &fs.Files[p]
 }
 
 func TorrentFilesCheck(i int, p int, b bool) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 
 	// update dynamic data
 	ff := fs.Files[p]
 	ff.Check = b
+
+	if fs.Checks == nil {
+		fillFilesInfo(info, fs)
+	}
 
 	fs.Checks[p] = b
 	fileUpdateCheck(t)
@@ -148,6 +165,10 @@ func filePendingBitmap(t *torrent.Torrent) *bitmap.Bitmap {
 	var bm bitmap.Bitmap
 
 	info := t.Info()
+
+	if fs.Checks == nil {
+		fillFilesInfo(info, fs)
+	}
 
 	var offset int64
 	for i, fi := range info.UpvertedFiles() {

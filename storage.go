@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/anacrolix/missinggo"
@@ -28,6 +29,7 @@ type fileStorage struct {
 
 	Checks          []bool
 	CompletedPieces bitmap.Bitmap
+	mu              sync.Mutex
 
 	// date in seconds when torrent been StartTorrent, we measure this value to get downloadingTime && seedingTime
 	ActivateDate int64
@@ -103,23 +105,33 @@ type fileStoragePiece struct {
 }
 
 func (fs *fileStoragePiece) GetIsComplete() bool {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	return fs.CompletedPieces.Get(fs.p.Index())
 }
 
 func (fs *fileStoragePiece) MarkComplete() error {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	fs.CompletedPieces.Set(fs.p.Index(), true)
 
-	if !fs.t.Check() {
-		if fs.CompletedDate == 0 {
-			if pendingCompleted(fs.t) {
-				now := time.Now().Unix()
-				fs.CompletedDate = now
-				fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
-				fs.ActivateDate = now // seeding time now
-				fs.Completed.Set()
+	// we need to fire fs.Completed after go.torrent unlocked
+	go func() {
+		mu.Lock()
+		defer mu.Unlock()
+
+		if !fs.t.Check() {
+			if fs.CompletedDate == 0 {
+				if pendingCompleted(fs.t) {
+					now := time.Now().Unix()
+					fs.CompletedDate = now
+					fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
+					fs.ActivateDate = now // seeding time now
+					fs.Completed.Set()
+				}
 			}
 		}
-	}
+	}()
 
 	return nil
 }

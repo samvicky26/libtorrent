@@ -21,6 +21,9 @@ const (
 )
 
 func TorrentPeersCount(i int) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	f := filestorage[t.InfoHash()]
 
@@ -45,6 +48,9 @@ func TorrentPeersCount(i int) int {
 }
 
 func TorrentPeers(i int, p int) *Peer {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	f := filestorage[t.InfoHash()]
 	return &f.Peers[p]

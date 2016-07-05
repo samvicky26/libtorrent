@@ -20,11 +20,14 @@ import (
 //
 //export SaveTorrent
 func SaveTorrent(i int) []byte {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 
 	var buf []byte
 
-	buf, err = SaveTorrentState(t)
+	buf, err = saveTorrentState(t)
 	if err != nil {
 		return nil
 	}
@@ -38,9 +41,12 @@ func SaveTorrent(i int) []byte {
 //
 //export LoadTorrent
 func LoadTorrent(path string, buf []byte) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	var t *torrent.Torrent
 
-	t, err = LoadTorrentState(path, buf)
+	t, err = loadTorrentState(path, buf)
 	if err != nil {
 		return -1
 	}
@@ -80,7 +86,7 @@ type TorrentState struct {
 }
 
 // Save torrent to state file
-func SaveTorrentState(t *torrent.Torrent) ([]byte, error) {
+func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
 	s := TorrentState{Version: 1}
 
 	fs := filestorage[t.InfoHash()]
@@ -139,7 +145,7 @@ func SaveTorrentState(t *torrent.Torrent) ([]byte, error) {
 }
 
 // Load torrent from saved state
-func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
+func loadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	var s TorrentState
 	err = json.Unmarshal(buf, &s)
 	if err != nil {
@@ -187,9 +193,6 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	}
 
 	if t.Info() != nil {
-		if fs.Checks == nil {
-			fillFilesInfo(t.Info(), fs)
-		}
 		fileUpdateCheck(t)
 	}
 

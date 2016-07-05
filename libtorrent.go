@@ -25,6 +25,9 @@ var (
 )
 
 func SetDefaultAnnouncesList(str string) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	builtinAnnounceList = nil
 	for _, s := range strings.Split(str, "\n") {
 		builtinAnnounceList = append(builtinAnnounceList, []string{s})
@@ -60,6 +63,9 @@ func CreateTorrentFile(path string) []byte {
 //
 //export Create
 func Create() bool {
+	mu.Lock()
+	defer mu.Unlock()
+
 	torrents = make(map[int]*torrent.Torrent)
 	filestorage = make(map[metainfo.Hash]*fileStorage)
 	queue = make(map[*torrent.Torrent]int64)
@@ -77,7 +83,9 @@ func Create() bool {
 	clientAddr = client.ListenAddr().String()
 
 	// when create client do 1 second discovery
+	mu.Unlock()
 	mapping(1 * time.Second)
+	mu.Lock()
 
 	err = client.Start()
 	if err != nil {
@@ -113,6 +121,9 @@ func Stats() *BytesInfo {
 //
 //export Count
 func Count() int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	return len(torrents)
 }
 
@@ -123,6 +134,9 @@ func ListenAddr() string {
 
 //export CreateTorrent
 func CreateTorrent(p string) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	var t *torrent.Torrent
 
 	mi := &metainfo.MetaInfo{
@@ -144,8 +158,6 @@ func CreateTorrent(p string) int {
 	}
 
 	fs := createFileStorage(path.Dir(p))
-
-	fillFilesInfo(&mi.Info, fs)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
@@ -169,6 +181,9 @@ func CreateTorrent(p string) int {
 //
 //export AddMagnet
 func AddMagnet(path string, magnet string) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	var t *torrent.Torrent
 	var spec *torrent.TorrentSpec
 
@@ -213,14 +228,15 @@ func AddTorrentFromURL(path string, url string) int {
 		return -1
 	}
 
+	mu.Lock()
+	defer mu.Unlock()
+
 	if _, ok := filestorage[mi.Info.Hash()]; ok {
 		err = errors.New("Already exists")
 		return -1
 	}
 
 	fs := createFileStorage(path)
-
-	fillFilesInfo(&mi.Info, fs)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
@@ -252,14 +268,15 @@ func AddTorrentFromFile(path string, file string) int {
 		return -1
 	}
 
+	mu.Lock()
+	defer mu.Unlock()
+
 	if _, ok := filestorage[mi.Info.Hash()]; ok {
 		err = errors.New("Already exists")
 		return -1
 	}
 
 	fs := createFileStorage(path)
-
-	fillFilesInfo(&mi.Info, fs)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
@@ -289,14 +306,15 @@ func AddTorrentFromBytes(path string, buf []byte) int {
 		return -1
 	}
 
+	mu.Lock()
+	defer mu.Unlock()
+
 	if _, ok := filestorage[mi.Info.Hash()]; ok {
 		err = errors.New("Already exists")
 		return -1
 	}
 
 	fs := createFileStorage(path)
-
-	fillFilesInfo(&mi.Info, fs)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
@@ -318,6 +336,9 @@ func AddTorrentFromBytes(path string, buf []byte) int {
 //
 //export GetTorrent
 func GetTorrent(i int) []byte {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 
 	var buf bytes.Buffer
@@ -339,6 +360,9 @@ func GetTorrent(i int) []byte {
 //
 //export StartTorrent
 func StartTorrent(i int) bool {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 
 	if client.ActiveTorrent(t) {
@@ -372,9 +396,8 @@ func startTorrent(t *torrent.Torrent) bool {
 			return
 		}
 
-		if fs.Checks == nil {
-			fillFilesInfo(t.Info(), fs)
-		}
+		mu.Lock()
+		defer mu.Unlock()
 
 		now := time.Now().Unix()
 		fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
@@ -390,11 +413,33 @@ func startTorrent(t *torrent.Torrent) bool {
 			b1 := t.BytesCompleted()
 			select {
 			case <-time.After(timeout):
-				timeout = time.Duration(QueueTimeout) * time.Second
-				s := torrentStatus(t)
-				if s == StatusSeeding {
+			case <-fs.Completed.LockedChan(&mu):
+			case <-t.Wait():
+				return
+			}
+			timeout = time.Duration(QueueTimeout) * time.Second
+			mu.Lock()
+			s := torrentStatus(t)
+			if s == StatusSeeding {
+				if queueNext(t) {
+					// we been removed, stop queue engine
+					mu.Unlock()
+					return
+				} else {
+					// we not been removed
+					if len(queue) != 0 {
+						// queue full, some one soon be available, check every minute
+						timeout = 1 * time.Minute
+					}
+				}
+			}
+			if s == StatusDownloading {
+				// check stalled, and rotate if it does
+				b2 := t.BytesCompleted()
+				if b1 == b2 {
 					if queueNext(t) {
 						// we been removed, stop queue engine
+						mu.Unlock()
 						return
 					} else {
 						// we not been removed
@@ -404,37 +449,8 @@ func startTorrent(t *torrent.Torrent) bool {
 						}
 					}
 				}
-				if s == StatusDownloading {
-					// check stalled, and rotate if it does
-					b2 := t.BytesCompleted()
-					if b1 == b2 {
-						if queueNext(t) {
-							// we been removed, stop queue engine
-							return
-						} else {
-							// we not been removed
-							if len(queue) != 0 {
-								// queue full, some one soon be available, check every minute
-								timeout = 1 * time.Minute
-							}
-						}
-					}
-				}
-			case <-fs.Completed.LockedChan(&mu):
-				timeout = time.Duration(QueueTimeout) * time.Second
-				if queueNext(t) {
-					// we been removed, stop queue engine
-					return
-				} else {
-					// we not been removed
-					if len(queue) != 0 {
-						// queue full, some one soon be available, check every minute
-						timeout = 1 * time.Minute
-					}
-				}
-			case <-t.Wait():
-				return
 			}
+			mu.Unlock()
 		}
 	}()
 
@@ -445,6 +461,9 @@ func startTorrent(t *torrent.Torrent) bool {
 //
 //export DownloadMetadata
 func DownloadMetadata(i int) bool {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 
@@ -466,9 +485,8 @@ func DownloadMetadata(i int) bool {
 			return
 		}
 
-		if fs.Checks == nil {
-			fillFilesInfo(t.Info(), fs)
-		}
+		mu.Lock()
+		defer mu.Unlock()
 
 		now := time.Now().Unix()
 		fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
@@ -482,6 +500,9 @@ func DownloadMetadata(i int) bool {
 }
 
 func MetaTorrent(i int) bool {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	return t.Info() != nil
 }
@@ -490,6 +511,9 @@ func MetaTorrent(i int) bool {
 //
 //export StopTorrent
 func StopTorrent(i int) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	stopTorrent(t)
 	queueNext(nil)
@@ -520,6 +544,9 @@ func stopTorrent(t *torrent.Torrent) {
 //
 //export CheckTorrent
 func CheckTorrent(i int) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	client.CheckTorrent(t)
 }
@@ -528,6 +555,9 @@ func CheckTorrent(i int) {
 //
 //export RemoveTorrent
 func RemoveTorrent(i int) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	if client.ActiveTorrent(t) {
 		t.Drop()
@@ -537,6 +567,9 @@ func RemoveTorrent(i int) {
 
 //export Error
 func Error() string {
+	mu.Lock()
+	defer mu.Unlock()
+
 	if err != nil {
 		return err.Error()
 	}
@@ -545,6 +578,9 @@ func Error() string {
 
 //export Close
 func Close() {
+	mu.Lock()
+	defer mu.Unlock()
+
 	if client != nil {
 		client.Close()
 		client = nil
@@ -564,9 +600,6 @@ var index int
 var mu sync.Mutex
 
 func register(t *torrent.Torrent) int {
-	mu.Lock()
-	defer mu.Unlock()
-
 	fs := filestorage[t.InfoHash()]
 
 	index++
@@ -581,9 +614,6 @@ func register(t *torrent.Torrent) int {
 }
 
 func unregister(i int) {
-	mu.Lock()
-	defer mu.Unlock()
-
 	t := torrents[i]
 
 	delete(filestorage, t.InfoHash())
