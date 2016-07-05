@@ -94,7 +94,7 @@ func TorrentFilesCheck(i int, p int, b bool) {
 	ff.Check = b
 
 	if fs.Checks == nil {
-		fillFilesInfo(info, fs)
+		fillFilesInfo(t.Info(), fs)
 	}
 
 	fs.Checks[p] = b

@@ -22,6 +22,8 @@ var (
 		{"udp://tracker.openbittorrent.com:80"},
 		{"udp://tracker.kicks-ass.net:80/announce"},
 	}
+
+	SocketsPerTorrent = 40
 )
 
 func SetDefaultAnnouncesList(str string) {
@@ -79,6 +81,8 @@ func Create() bool {
 	if err != nil {
 		return false
 	}
+
+	client.SetHalfOpenLimit(SocketsPerTorrent)
 
 	clientAddr = client.ListenAddr().String()
 
@@ -609,6 +613,8 @@ func register(t *torrent.Torrent) int {
 	torrents[index] = t
 
 	fs.t = t
+
+	t.SetMaxConns(SocketsPerTorrent)
 
 	return index
 }
