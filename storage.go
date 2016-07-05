@@ -137,7 +137,20 @@ func (m *fileStoragePiece) MarkComplete() error {
 
 		fs := filestorage[m.info.Hash()]
 
-		if m.info.NumPieces() == m.completedPieces.Len() {
+		fb := filePendingBitmap(m.info, fs.Checks)
+
+		completed := true
+
+		// run thougth all pieces and check they all present in m.completedPieces
+		fb.IterTyped(func(piece int) (again bool) {
+			if !m.completedPieces.Contains(piece) {
+				completed = false
+				return false
+			}
+			return true
+		})
+
+		if completed {
 			fs.Completed.Set()
 			if m.active {
 				// mark CompletedDate only when from active state (not cheking)

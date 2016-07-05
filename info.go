@@ -117,7 +117,8 @@ func TorrentPendingBytesLength(i int) int64 {
 	defer mu.Unlock()
 
 	t := torrents[i]
-	fb := filePendingBitmap(t)
+	fs := filestorage[t.InfoHash()]
+	fb := filePendingBitmap(t.Info(), fs.Checks)
 	return pendingBytesLength(t, fb)
 }
 
@@ -127,7 +128,8 @@ func TorrentPendingBytesCompleted(i int) int64 {
 	defer mu.Unlock()
 
 	t := torrents[i]
-	fb := filePendingBitmap(t)
+	fs := filestorage[t.InfoHash()]
+	fb := filePendingBitmap(t.Info(), fs.Checks)
 	return pendingBytesCompleted(t, fb)
 }
 
