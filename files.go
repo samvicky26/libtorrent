@@ -15,7 +15,7 @@ type File struct {
 	BytesCompleted int64
 }
 
-func (m *fileStorage) fillInfo(info *metainfo.InfoEx) {
+func fillFilesInfo(info *metainfo.InfoEx, m *fileStorage) {
 	m.Checks = make([]bool, len(info.UpvertedFiles()))
 	for i, _ := range m.Checks {
 		m.Checks[i] = true
@@ -23,16 +23,24 @@ func (m *fileStorage) fillInfo(info *metainfo.InfoEx) {
 }
 
 func TorrentFilesCount(i int) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 
 	fs.Files = nil
 
-	ff := t.Files()
-
 	info := t.Info()
+	if info == nil {
+		return 0
+	}
 
-	for i, v := range ff {
+	if fs.Checks == nil {
+		fillFilesInfo(info, fs)
+	}
+
+	for i, v := range t.Files() {
 		p := File{}
 		p.Check = fs.Checks[i]
 		p.Path = v.Path()
@@ -67,18 +75,28 @@ func TorrentFilesCount(i int) int {
 
 // return torrent files array
 func TorrentFiles(i int, p int) *File {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 	return &fs.Files[p]
 }
 
 func TorrentFilesCheck(i int, p int, b bool) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 
 	// update dynamic data
 	ff := fs.Files[p]
 	ff.Check = b
+
+	if fs.Checks == nil {
+		fillFilesInfo(t.Info(), fs)
+	}
 
 	fs.Checks[p] = b
 	fileUpdateCheck(t)
@@ -112,7 +130,7 @@ func fileUpdateCheck(t *torrent.Torrent) {
 	t.CancelPieces(0, t.NumPieces())
 	t.UpdatePiecePriorities()
 
-	fb := filePendingBitmap(t)
+	fb := filePendingBitmap(t.Info(), fs)
 	fb.IterTyped(func(piece int) (more bool) {
 		t.DownloadPieces(piece, piece+1)
 		return true
@@ -120,8 +138,7 @@ func fileUpdateCheck(t *torrent.Torrent) {
 
 	now := time.Now().Unix()
 
-	if pendingBytesCompleted(t, fb) < pendingBytesLength(t, fb) {
-		// now we downloading
+	if pendingBytesCompleted(t, fb) < pendingBytesLength(t, fb) { // now we downloading
 		fs.CompletedDate = 0
 		fs.Completed.Clear()
 		// did we seed before? update seed timer
@@ -129,9 +146,7 @@ func fileUpdateCheck(t *torrent.Torrent) {
 			fs.SeedingTime = fs.SeedingTime + (now - fs.ActivateDate)
 			fs.ActivateDate = now
 		}
-	} else {
-		// now we seeing
-
+	} else { // now we seeing
 		// did we download before? update downloading timer then
 		if downloading {
 			fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
@@ -142,12 +157,12 @@ func fileUpdateCheck(t *torrent.Torrent) {
 	t.UpdatePiecePriorities()
 }
 
-func filePendingBitmap(t *torrent.Torrent) *bitmap.Bitmap {
-	fs := filestorage[t.InfoHash()]
+func filePendingBitmap(info *metainfo.InfoEx, fs *fileStorage) *bitmap.Bitmap {
+	if fs.Checks == nil {
+		fillFilesInfo(info, fs)
+	}
 
 	var bm bitmap.Bitmap
-
-	info := t.Info()
 
 	var offset int64
 	for i, fi := range info.UpvertedFiles() {
@@ -163,7 +178,13 @@ func filePendingBitmap(t *torrent.Torrent) *bitmap.Bitmap {
 }
 
 func pendingCompleted(t *torrent.Torrent) bool {
-	fb := filePendingBitmap(t)
+	info := t.Info()
+	if info == nil {
+		return false
+	}
+
+	fs := filestorage[t.InfoHash()]
+	fb := filePendingBitmap(info, fs)
 	return pendingBytesCompleted(t, fb) >= pendingBytesLength(t, fb)
 }
 

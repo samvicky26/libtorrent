@@ -4,11 +4,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/bitmap"
-	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 )
@@ -16,18 +16,13 @@ import (
 var filestorage map[metainfo.Hash]*fileStorage
 
 type fileStorage struct {
-	t *torrent.Torrent
-
-	Path string
-
 	// dynamic data
 	Trackers []Tracker
 	Pieces   []int32
 	Files    []File
 	Peers    []Peer
 
-	Checks          []bool
-	CompletedPieces bitmap.Bitmap
+	Checks []bool
 
 	// date in seconds when torrent been StartTorrent, we measure this value to get downloadingTime && seedingTime
 	ActivateDate int64
@@ -48,43 +43,65 @@ type fileStorage struct {
 	Comment   string
 }
 
-func CreateFileStorage(path string) *fileStorage {
-	return &fileStorage{
+func registerFileStorage(info metainfo.Hash, path string) *fileStorage {
+	ts := &torrentStorage{path: path}
+
+	torrentstorageLock.Lock()
+	torrentstorage[info] = ts
+	torrentstorageLock.Unlock()
+
+	fs := &fileStorage{
 		AddedDate: time.Now().Unix(),
-		Path:      path,
 
 		Comment:   "dynamic metainfo from client",
 		Creator:   "go.libtorrent",
 		CreatedOn: time.Now().Unix(),
 	}
+
+	filestorage[info] = fs
+
+	return fs
 }
+
+type torrentStorage struct {
+	active          bool
+	path            string
+	info            *metainfo.InfoEx
+	completedPieces bitmap.Bitmap
+}
+
+var torrentstorage map[metainfo.Hash]*torrentStorage
+var torrentstorageLock sync.Mutex
 
 type torrentOpener struct {
 }
 
 type fileTorrentStorage struct {
-	fs *fileStorage
+	ts *torrentStorage
 }
 
 func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, error) {
-	fs := filestorage[info.Hash()]
-	return fileTorrentStorage{fs}, nil
+	torrentstorageLock.Lock()
+	defer torrentstorageLock.Unlock()
+	ts := torrentstorage[info.Hash()]
+	ts.info = info
+	return fileTorrentStorage{ts}, nil
 }
 
 type fileStorageTorrent struct {
 	info *metainfo.InfoEx
-	fs   *fileStorage
+	ts   *torrentStorage
 }
 
 func (m fileTorrentStorage) Piece(p metainfo.Piece) storage.Piece {
 	// Create a view onto the file-based torrent storage.
 	_io := &fileStorageTorrent{
 		p.Info,
-		m.fs,
+		m.ts,
 	}
 	// Return the appropriate segments of this.
 	return &fileStoragePiece{
-		m.fs,
+		m.ts,
 		p,
 		missinggo.NewSectionWriter(_io, p.Offset(), p.Length()),
 		io.NewSectionReader(_io, p.Offset(), p.Length()),
@@ -96,30 +113,57 @@ func (fs fileTorrentStorage) Close() error {
 }
 
 type fileStoragePiece struct {
-	*fileStorage
+	*torrentStorage
 	p metainfo.Piece
 	io.WriterAt
 	io.ReaderAt
 }
 
-func (fs *fileStoragePiece) GetIsComplete() bool {
-	return fs.CompletedPieces.Get(fs.p.Index())
+func (m *fileStoragePiece) GetIsComplete() bool {
+	torrentstorageLock.Lock()
+	defer torrentstorageLock.Unlock()
+	return m.completedPieces.Get(m.p.Index())
 }
 
-func (fs *fileStoragePiece) MarkComplete() error {
-	fs.CompletedPieces.Set(fs.p.Index(), true)
+func (m *fileStoragePiece) MarkComplete() error {
+	torrentstorageLock.Lock()
+	defer torrentstorageLock.Unlock()
+	m.completedPieces.Set(m.p.Index(), true)
 
-	if !fs.t.Check() {
-		if fs.CompletedDate == 0 {
-			if pendingCompleted(fs.t) {
-				now := time.Now().Unix()
-				fs.CompletedDate = now
-				fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
-				fs.ActivateDate = now // seeding time now
-				fs.Completed.Set()
+	// we need to fire fs.Completed after go.torrent unlocked
+	go func() {
+		mu.Lock()
+		defer mu.Unlock()
+
+		fs := filestorage[m.info.Hash()]
+
+		fb := filePendingBitmap(m.info, fs)
+
+		completed := true
+
+		// run thougth all pieces and check they all present in m.completedPieces
+		fb.IterTyped(func(piece int) (again bool) {
+			if !m.completedPieces.Contains(piece) {
+				completed = false
+				return false
+			}
+			return true
+		})
+
+		if completed {
+			fs.Completed.Set()
+			if m.active {
+				// mark CompletedDate only when from active state (not cheking)
+				if fs.CompletedDate == 0 {
+					now := time.Now().Unix()
+					fs.CompletedDate = now
+					fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
+					fs.ActivateDate = now // seeding time now
+					return
+				}
 			}
 		}
-	}
+	}()
 
 	return nil
 }
@@ -215,5 +259,5 @@ func (fst *fileStorageTorrent) WriteAt(p []byte, off int64) (n int, err error) {
 }
 
 func (fst *fileStorageTorrent) fileInfoName(fi metainfo.FileInfo) string {
-	return filepath.Join(append([]string{fst.fs.Path, fst.info.Name}, fi.Path...)...)
+	return filepath.Join(append([]string{fst.ts.path, fst.info.Name}, fi.Path...)...)
 }

@@ -10,16 +10,25 @@ const (
 )
 
 func TorrentPieceLength(i int) int64 {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	return t.Info().PieceLength
 }
 
 func TorrentPiecesCount(i int) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	return t.NumPieces()
 }
 
 func TorrentPiecesCompactCount(i int, size int) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 	fs.Pieces = nil
@@ -99,6 +108,9 @@ func TorrentPiecesCompactCount(i int, size int) int {
 }
 
 func TorrentPiecesCompact(i int, p int) int32 {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	f := filestorage[t.InfoHash()]
 	return f.Pieces[p]

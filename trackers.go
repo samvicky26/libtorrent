@@ -16,6 +16,9 @@ type Tracker struct {
 }
 
 func TorrentTrackersCount(i int) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	f := filestorage[t.InfoHash()]
 	f.Trackers = nil
@@ -26,17 +29,26 @@ func TorrentTrackersCount(i int) int {
 }
 
 func TorrentTrackers(i int, p int) *Tracker {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	f := filestorage[t.InfoHash()]
 	return &f.Trackers[p]
 }
 
 func TorrentTrackerRemove(i int, url string) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	t.RemoveTracker(url)
 }
 
 func TorrentTrackerAdd(i int, addr string) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	t := torrents[i]
 	t.AddTrackers([][]string{[]string{addr}})
 }

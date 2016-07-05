@@ -10,6 +10,50 @@ import (
 	pp "github.com/anacrolix/torrent/peer_protocol"
 )
 
+// SaveTorrent
+//
+// Every torrent application restarts it require to check files consistency. To
+// avoid this, and save machine time we need to store torrents runtime states
+// completed pieces and other information externaly.
+//
+// Save runtime torrent data to state file
+//
+//export SaveTorrent
+func SaveTorrent(i int) []byte {
+	mu.Lock()
+	defer mu.Unlock()
+
+	t := torrents[i]
+
+	var buf []byte
+
+	buf, err = saveTorrentState(t)
+	if err != nil {
+		return nil
+	}
+
+	return buf
+}
+
+// LoadTorrent
+//
+// Load runtime torrent data from saved state file
+//
+//export LoadTorrent
+func LoadTorrent(path string, buf []byte) int {
+	mu.Lock()
+	defer mu.Unlock()
+
+	var t *torrent.Torrent
+
+	t, err = loadTorrentState(path, buf)
+	if err != nil {
+		return -1
+	}
+
+	return register(t)
+}
+
 type TorrentState struct {
 	Version int `json:"version"`
 
@@ -42,8 +86,8 @@ type TorrentState struct {
 }
 
 // Save torrent to state file
-func SaveTorrentState(t *torrent.Torrent) ([]byte, error) {
-	s := TorrentState{Version: 1}
+func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
+	s := TorrentState{Version: 2}
 
 	fs := filestorage[t.InfoHash()]
 
@@ -74,7 +118,7 @@ func SaveTorrentState(t *torrent.Torrent) ([]byte, error) {
 
 	stats := t.Stats()
 	s.Downloaded = stats.Downloaded
-	s.Uploaded = stats.Uploaded
+	s.Uploaded = stats.BytesSent
 
 	s.Checks = fs.Checks
 
@@ -89,19 +133,22 @@ func SaveTorrentState(t *torrent.Torrent) ([]byte, error) {
 	s.CreatedOn = fs.CreatedOn
 
 	if t.Info() != nil {
+		torrentstorageLock.Lock()
+		ts := torrentstorage[t.InfoHash()]
 		bf := make([]bool, t.Info().NumPieces())
-		fs.CompletedPieces.IterTyped(func(piece int) (again bool) {
+		ts.completedPieces.IterTyped(func(piece int) (again bool) {
 			bf[piece] = true
 			return true
 		})
 		s.Pieces = bf
+		torrentstorageLock.Unlock()
 	}
 
 	return json.Marshal(s)
 }
 
 // Load torrent from saved state
-func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
+func loadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	var s TorrentState
 	err = json.Unmarshal(buf, &s)
 	if err != nil {
@@ -120,7 +167,7 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 		spec = torrent.TorrentSpecFromMetaInfo(s.MetaInfo)
 	}
 
-	fs := CreateFileStorage(path)
+	fs := registerFileStorage(spec.InfoHash, path)
 
 	var n bool
 	t, n = client.AddTorrentInfoHash(spec.InfoHash)
@@ -133,12 +180,14 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 		t.SetDisplayName(spec.DisplayName)
 	}
 
+	torrentstorageLock.Lock()
+	ts := torrentstorage[spec.InfoHash]
 	for i, b := range s.Pieces {
-		fs.CompletedPieces.Set(i, b)
+		ts.completedPieces.Set(i, b)
 	}
-	fs.Checks = s.Checks
+	torrentstorageLock.Unlock()
 
-	filestorage[spec.InfoHash] = fs
+	fs.Checks = s.Checks
 
 	if spec.Info != nil {
 		err = t.LoadInfoBytes(spec.Info.Bytes)
@@ -149,9 +198,6 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	}
 
 	if t.Info() != nil {
-		if fs.Checks == nil {
-			fs.fillInfo(t.Info())
-		}
 		fileUpdateCheck(t)
 	}
 
@@ -160,7 +206,7 @@ func LoadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	}
 	t.AddTrackers(spec.Trackers)
 
-	t.SetStats(torrent.TorrentStats{Downloaded: s.Downloaded, Uploaded: s.Uploaded})
+	t.SetStats(s.Downloaded, s.Uploaded)
 
 	fs.DownloadingTime = s.DownloadingTime
 	fs.SeedingTime = s.SeedingTime
