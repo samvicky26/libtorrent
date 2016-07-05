@@ -115,6 +115,10 @@ func TorrentFileRename(i int, f int, n string) {
 func fileUpdateCheck(t *torrent.Torrent) {
 	fs := filestorage[t.InfoHash()]
 
+	if fs.Checks == nil {
+		fillFilesInfo(t.Info(), fs)
+	}
+
 	seeding := false
 	downloading := false
 
@@ -174,8 +178,13 @@ func filePendingBitmap(info *metainfo.InfoEx, checks []bool) *bitmap.Bitmap {
 }
 
 func pendingCompleted(t *torrent.Torrent) bool {
+	info := t.Info()
+	if info == nil {
+		return false
+	}
+
 	fs := filestorage[t.InfoHash()]
-	fb := filePendingBitmap(t.Info(), fs.Checks)
+	fb := filePendingBitmap(info, fs.Checks)
 	return pendingBytesCompleted(t, fb) >= pendingBytesLength(t, fb)
 }
 
