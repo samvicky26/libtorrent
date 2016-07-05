@@ -137,7 +137,7 @@ func (m *fileStoragePiece) MarkComplete() error {
 
 		fs := filestorage[m.info.Hash()]
 
-		fb := filePendingBitmap(m.info, fs.Checks)
+		fb := filePendingBitmap(m.info, fs)
 
 		completed := true
 
