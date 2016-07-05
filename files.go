@@ -15,13 +15,6 @@ type File struct {
 	BytesCompleted int64
 }
 
-func fillFilesInfo(info *metainfo.InfoEx, m *fileStorage) {
-	m.Checks = make([]bool, len(info.UpvertedFiles()))
-	for i, _ := range m.Checks {
-		m.Checks[i] = true
-	}
-}
-
 func TorrentFilesCount(i int) int {
 	mu.Lock()
 	defer mu.Unlock()
@@ -36,13 +29,13 @@ func TorrentFilesCount(i int) int {
 		return 0
 	}
 
-	if fs.Checks == nil {
-		fillFilesInfo(info, fs)
-	}
+	torrentstorageLock.Lock()
+	defer torrentstorageLock.Unlock()
+	ts := torrentstorage[t.InfoHash()]
 
 	for i, v := range t.Files() {
 		p := File{}
-		p.Check = fs.Checks[i]
+		p.Check = ts.checks[i]
 		p.Path = v.Path()
 		v.Offset()
 		p.Length = v.Length()
@@ -94,11 +87,11 @@ func TorrentFilesCheck(i int, p int, b bool) {
 	ff := fs.Files[p]
 	ff.Check = b
 
-	if fs.Checks == nil {
-		fillFilesInfo(t.Info(), fs)
-	}
+	torrentstorageLock.Lock()
+	ts := torrentstorage[t.InfoHash()]
+	ts.checks[p] = b
+	torrentstorageLock.Unlock()
 
-	fs.Checks[p] = b
 	fileUpdateCheck(t)
 }
 
@@ -130,7 +123,7 @@ func fileUpdateCheck(t *torrent.Torrent) {
 	t.CancelPieces(0, t.NumPieces())
 	t.UpdatePiecePriorities()
 
-	fb := filePendingBitmap(t.Info(), fs)
+	fb := filePendingBitmap(t.Info())
 	fb.IterTyped(func(piece int) (more bool) {
 		t.DownloadPieces(piece, piece+1)
 		return true
@@ -157,10 +150,10 @@ func fileUpdateCheck(t *torrent.Torrent) {
 	t.UpdatePiecePriorities()
 }
 
-func filePendingBitmap(info *metainfo.InfoEx, fs *fileStorage) *bitmap.Bitmap {
-	if fs.Checks == nil {
-		fillFilesInfo(info, fs)
-	}
+func filePendingBitmap(info *metainfo.InfoEx) *bitmap.Bitmap {
+	torrentstorageLock.Lock()
+	defer torrentstorageLock.Unlock()
+	ts := torrentstorage[info.Hash()]
 
 	var bm bitmap.Bitmap
 
@@ -168,7 +161,7 @@ func filePendingBitmap(info *metainfo.InfoEx, fs *fileStorage) *bitmap.Bitmap {
 	for i, fi := range info.UpvertedFiles() {
 		s := offset / info.PieceLength
 		e := (offset+fi.Length)/info.PieceLength + 1
-		if fs.Checks[i] {
+		if ts.checks[i] {
 			bm.AddRange(int(s), int(e))
 		}
 		offset += fi.Length
@@ -183,8 +176,7 @@ func pendingCompleted(t *torrent.Torrent) bool {
 		return false
 	}
 
-	fs := filestorage[t.InfoHash()]
-	fb := filePendingBitmap(info, fs)
+	fb := filePendingBitmap(info)
 	return pendingBytesCompleted(t, fb) >= pendingBytesLength(t, fb)
 }
 

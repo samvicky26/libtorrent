@@ -22,8 +22,6 @@ type fileStorage struct {
 	Files    []File
 	Peers    []Peer
 
-	Checks []bool
-
 	// date in seconds when torrent been StartTorrent, we measure this value to get downloadingTime && seedingTime
 	ActivateDate int64
 
@@ -66,6 +64,7 @@ func registerFileStorage(info metainfo.Hash, path string) *fileStorage {
 type torrentStorage struct {
 	active          bool
 	path            string
+	checks          []bool
 	info            *metainfo.InfoEx
 	completedPieces bitmap.Bitmap
 }
@@ -83,8 +82,18 @@ type fileTorrentStorage struct {
 func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, error) {
 	torrentstorageLock.Lock()
 	defer torrentstorageLock.Unlock()
+
 	ts := torrentstorage[info.Hash()]
 	ts.info = info
+
+	// if we come here from LoadTorrent checks is set. otherwise we come here after torrent open, fill defaults
+	if ts.checks == nil {
+		ts.checks = make([]bool, len(info.UpvertedFiles()))
+		for i, _ := range ts.checks {
+			ts.checks[i] = true
+		}
+	}
+
 	return fileTorrentStorage{ts}, nil
 }
 
@@ -137,7 +146,7 @@ func (m *fileStoragePiece) MarkComplete() error {
 
 		fs := filestorage[m.info.Hash()]
 
-		fb := filePendingBitmap(m.info, fs)
+		fb := filePendingBitmap(m.info)
 
 		completed := true
 
