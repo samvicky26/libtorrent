@@ -120,8 +120,6 @@ func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
 	s.Downloaded = stats.Downloaded
 	s.Uploaded = stats.BytesSent
 
-	s.Checks = fs.Checks
-
 	s.DownloadingTime = fs.DownloadingTime
 	s.SeedingTime = fs.SeedingTime
 
@@ -135,12 +133,17 @@ func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
 	if t.Info() != nil {
 		torrentstorageLock.Lock()
 		ts := torrentstorage[t.InfoHash()]
+
 		bf := make([]bool, t.Info().NumPieces())
 		ts.completedPieces.IterTyped(func(piece int) (again bool) {
 			bf[piece] = true
 			return true
 		})
 		s.Pieces = bf
+
+		s.Checks = make([]bool, len(ts.checks))
+		copy(s.Checks, ts.checks)
+
 		torrentstorageLock.Unlock()
 	}
 
@@ -185,9 +188,8 @@ func loadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	for i, b := range s.Pieces {
 		ts.completedPieces.Set(i, b)
 	}
+	ts.checks = s.Checks
 	torrentstorageLock.Unlock()
-
-	fs.Checks = s.Checks
 
 	if spec.Info != nil {
 		err = t.LoadInfoBytes(spec.Info.Bytes)
