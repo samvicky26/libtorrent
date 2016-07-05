@@ -9,7 +9,6 @@ import (
 
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/bitmap"
-	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 )
@@ -45,7 +44,6 @@ type fileStorage struct {
 }
 
 func registerFileStorage(info metainfo.Hash, path string) *fileStorage {
-
 	ts := &torrentStorage{path: path}
 
 	torrentstorageLock.Lock()
@@ -66,8 +64,9 @@ func registerFileStorage(info metainfo.Hash, path string) *fileStorage {
 }
 
 type torrentStorage struct {
-	t               *torrent.Torrent
+	active          bool
 	path            string
+	info            *metainfo.InfoEx
 	completedPieces bitmap.Bitmap
 }
 
@@ -85,6 +84,7 @@ func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, err
 	torrentstorageLock.Lock()
 	defer torrentstorageLock.Unlock()
 	ts := torrentstorage[info.Hash()]
+	ts.info = info
 	return fileTorrentStorage{ts}, nil
 }
 
@@ -135,17 +135,18 @@ func (m *fileStoragePiece) MarkComplete() error {
 		mu.Lock()
 		defer mu.Unlock()
 
-		t := m.t
-		fs := filestorage[t.InfoHash()]
+		fs := filestorage[m.info.Hash()]
 
-		if !t.Check() {
-			if fs.CompletedDate == 0 {
-				if pendingCompleted(m.t) {
+		if m.info.NumPieces() == m.completedPieces.Len() {
+			fs.Completed.Set()
+			if m.active {
+				// mark CompletedDate only when from active state (not cheking)
+				if fs.CompletedDate == 0 {
 					now := time.Now().Unix()
 					fs.CompletedDate = now
 					fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
 					fs.ActivateDate = now // seeding time now
-					fs.Completed.Set()
+					return
 				}
 			}
 		}

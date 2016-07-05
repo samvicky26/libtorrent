@@ -384,6 +384,11 @@ func startTorrent(t *torrent.Torrent) bool {
 		return false
 	}
 
+	torrentstorageLock.Lock()
+	ts := torrentstorage[t.InfoHash()]
+	ts.active = true
+	torrentstorageLock.Unlock()
+
 	fs.ActivateDate = time.Now().Unix()
 
 	go func() {
@@ -475,6 +480,11 @@ func StopTorrent(i int) {
 func stopTorrent(t *torrent.Torrent) {
 	fs := filestorage[t.InfoHash()]
 
+	torrentstorageLock.Lock()
+	ts := torrentstorage[t.InfoHash()]
+	ts.active = false
+	torrentstorageLock.Unlock()
+
 	if client.ActiveTorrent(t) {
 		t.Drop()
 
@@ -560,11 +570,6 @@ func register(t *torrent.Torrent) int {
 	torrents[index] = t
 
 	t.SetMaxConns(SocketsPerTorrent)
-
-	torrentstorageLock.Lock()
-	ts := torrentstorage[t.InfoHash()]
-	ts.t = t
-	torrentstorageLock.Unlock()
 
 	return index
 }
