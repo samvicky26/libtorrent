@@ -150,7 +150,7 @@ func TorrentStats(i int) *StatsTorrent {
 	seeding := fs.SeedingTime
 
 	if client.ActiveTorrent(t) {
-		now := time.Now().UnixNano()
+		now := time.Now().Unix()
 		if t.Seeding() {
 			seeding = seeding + (now - fs.ActivateDate)
 		} else {

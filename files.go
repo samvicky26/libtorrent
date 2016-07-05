@@ -136,10 +136,9 @@ func fileUpdateCheck(t *torrent.Torrent) {
 		return true
 	})
 
-	now := time.Now().UnixNano()
+	now := time.Now().Unix()
 
-	if pendingBytesCompleted(t, fb) < pendingBytesLength(t, fb) {
-		// now we downloading
+	if pendingBytesCompleted(t, fb) < pendingBytesLength(t, fb) { // now we downloading
 		fs.CompletedDate = 0
 		fs.Completed.Clear()
 		// did we seed before? update seed timer
@@ -147,9 +146,7 @@ func fileUpdateCheck(t *torrent.Torrent) {
 			fs.SeedingTime = fs.SeedingTime + (now - fs.ActivateDate)
 			fs.ActivateDate = now
 		}
-	} else {
-		// now we seeing
-
+	} else { // now we seeing
 		// did we download before? update downloading timer then
 		if downloading {
 			fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)

@@ -70,6 +70,7 @@ func Create() bool {
 
 	torrents = make(map[int]*torrent.Torrent)
 	filestorage = make(map[metainfo.Hash]*fileStorage)
+	torrentstorage = make(map[metainfo.Hash]*torrentStorage)
 	queue = make(map[*torrent.Torrent]int64)
 	index = 0
 
@@ -161,13 +162,11 @@ func CreateTorrent(p string) int {
 		return -1
 	}
 
-	fs := createFileStorage(path.Dir(p))
+	fs := registerFileStorage(mi.Info.Hash(), path.Dir(p))
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
 	fs.CreatedOn = mi.CreationDate
-
-	filestorage[mi.Info.Hash()] = fs
 
 	t, err = client.AddTorrent(mi)
 	if err != nil {
@@ -201,7 +200,7 @@ func AddMagnet(path string, magnet string) int {
 		return -1
 	}
 
-	filestorage[spec.InfoHash] = createFileStorage(path)
+	registerFileStorage(spec.InfoHash, path)
 
 	t, _, err = client.AddTorrentSpec(spec)
 	if err != nil {
@@ -240,13 +239,11 @@ func AddTorrentFromURL(path string, url string) int {
 		return -1
 	}
 
-	fs := createFileStorage(path)
+	fs := registerFileStorage(mi.Info.Hash(), path)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
 	fs.CreatedOn = mi.CreationDate
-
-	filestorage[mi.Info.Hash()] = fs
 
 	t, err = client.AddTorrent(mi)
 	if err != nil {
@@ -280,13 +277,11 @@ func AddTorrentFromFile(path string, file string) int {
 		return -1
 	}
 
-	fs := createFileStorage(path)
+	fs := registerFileStorage(mi.Info.Hash(), path)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
 	fs.CreatedOn = mi.CreationDate
-
-	filestorage[mi.Info.Hash()] = fs
 
 	t, err = client.AddTorrent(mi)
 	if err != nil {
@@ -318,13 +313,11 @@ func AddTorrentFromBytes(path string, buf []byte) int {
 		return -1
 	}
 
-	fs := createFileStorage(path)
+	fs := registerFileStorage(mi.Info.Hash(), path)
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
 	fs.CreatedOn = mi.CreationDate
-
-	filestorage[mi.Info.Hash()] = fs
 
 	t, err = client.AddTorrent(mi)
 	if err != nil {
@@ -391,7 +384,7 @@ func startTorrent(t *torrent.Torrent) bool {
 		return false
 	}
 
-	fs.ActivateDate = time.Now().UnixNano()
+	fs.ActivateDate = time.Now().Unix()
 
 	go func() {
 		select {
@@ -403,59 +396,15 @@ func startTorrent(t *torrent.Torrent) bool {
 		mu.Lock()
 		defer mu.Unlock()
 
-		now := time.Now().UnixNano()
+		now := time.Now().Unix()
 		fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
 		fs.ActivateDate = now
 
 		fileUpdateCheck(t)
 	}()
 
-	// queue engine
 	go func() {
-		timeout := time.Duration(QueueTimeout) * time.Nanosecond
-		for {
-			b1 := t.BytesCompleted()
-			select {
-			case <-time.After(timeout):
-			case <-fs.Completed.LockedChan(&mu):
-			case <-t.Wait():
-				return
-			}
-			timeout = time.Duration(QueueTimeout) * time.Nanosecond
-			mu.Lock()
-			s := torrentStatus(t)
-			if s == StatusSeeding {
-				if queueNext(t) {
-					// we been removed, stop queue engine
-					mu.Unlock()
-					return
-				} else {
-					// we not been removed
-					if len(queue) != 0 {
-						// queue full, some one soon be available, check every minute
-						timeout = 1 * time.Minute
-					}
-				}
-			}
-			if s == StatusDownloading {
-				// check stalled, and rotate if it does
-				b2 := t.BytesCompleted()
-				if b1 == b2 {
-					if queueNext(t) {
-						// we been removed, stop queue engine
-						mu.Unlock()
-						return
-					} else {
-						// we not been removed
-						if len(queue) != 0 {
-							// queue full, some one soon be available, check every minute
-							timeout = 1 * time.Minute
-						}
-					}
-				}
-			}
-			mu.Unlock()
-		}
+		queueEngine(t)
 	}()
 
 	return true
@@ -480,7 +429,7 @@ func DownloadMetadata(i int) bool {
 		return false
 	}
 
-	fs.ActivateDate = time.Now().UnixNano()
+	fs.ActivateDate = time.Now().Unix()
 
 	go func() {
 		select {
@@ -529,7 +478,7 @@ func stopTorrent(t *torrent.Torrent) {
 	if client.ActiveTorrent(t) {
 		t.Drop()
 
-		now := time.Now().UnixNano()
+		now := time.Now().Unix()
 		if t.Seeding() {
 			fs.SeedingTime = fs.SeedingTime + (now - fs.ActivateDate)
 		} else {
@@ -604,17 +553,18 @@ var index int
 var mu sync.Mutex
 
 func register(t *torrent.Torrent) int {
-	fs := filestorage[t.InfoHash()]
-
 	index++
 	for torrents[index] != nil {
 		index++
 	}
 	torrents[index] = t
 
-	fs.t = t
-
 	t.SetMaxConns(SocketsPerTorrent)
+
+	torrentstorageLock.Lock()
+	ts := torrentstorage[t.InfoHash()]
+	ts.t = t
+	torrentstorageLock.Unlock()
 
 	return index
 }
@@ -623,6 +573,10 @@ func unregister(i int) {
 	t := torrents[i]
 
 	delete(filestorage, t.InfoHash())
+
+	torrentstorageLock.Lock()
+	delete(torrentstorage, t.InfoHash())
+	torrentstorageLock.Unlock()
 
 	delete(torrents, i)
 }

@@ -87,7 +87,7 @@ type TorrentState struct {
 
 // Save torrent to state file
 func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
-	s := TorrentState{Version: 1}
+	s := TorrentState{Version: 2}
 
 	fs := filestorage[t.InfoHash()]
 
@@ -107,7 +107,7 @@ func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
 	}
 
 	if client.ActiveTorrent(t) {
-		now := time.Now().UnixNano()
+		now := time.Now().Unix()
 		if t.Seeding() {
 			fs.SeedingTime = fs.SeedingTime + (now - fs.ActivateDate)
 		} else {
@@ -133,12 +133,15 @@ func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
 	s.CreatedOn = fs.CreatedOn
 
 	if t.Info() != nil {
+		torrentstorageLock.Lock()
+		ts := torrentstorage[t.InfoHash()]
 		bf := make([]bool, t.Info().NumPieces())
-		fs.CompletedPieces.IterTyped(func(piece int) (again bool) {
+		ts.completedPieces.IterTyped(func(piece int) (again bool) {
 			bf[piece] = true
 			return true
 		})
 		s.Pieces = bf
+		torrentstorageLock.Unlock()
 	}
 
 	return json.Marshal(s)
@@ -164,7 +167,7 @@ func loadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 		spec = torrent.TorrentSpecFromMetaInfo(s.MetaInfo)
 	}
 
-	fs := createFileStorage(path)
+	fs := registerFileStorage(spec.InfoHash, path)
 
 	var n bool
 	t, n = client.AddTorrentInfoHash(spec.InfoHash)
@@ -177,12 +180,14 @@ func loadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 		t.SetDisplayName(spec.DisplayName)
 	}
 
+	torrentstorageLock.Lock()
+	ts := torrentstorage[spec.InfoHash]
 	for i, b := range s.Pieces {
-		fs.CompletedPieces.Set(i, b)
+		ts.completedPieces.Set(i, b)
 	}
-	fs.Checks = s.Checks
+	torrentstorageLock.Unlock()
 
-	filestorage[spec.InfoHash] = fs
+	fs.Checks = s.Checks
 
 	if spec.Info != nil {
 		err = t.LoadInfoBytes(spec.Info.Bytes)
