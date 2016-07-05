@@ -52,12 +52,12 @@ type fileStorage struct {
 
 func createFileStorage(path string) *fileStorage {
 	return &fileStorage{
-		AddedDate: time.Now().Unix(),
+		AddedDate: time.Now().UnixNano(),
 		Path:      path,
 
 		Comment:   "dynamic metainfo from client",
 		Creator:   "go.libtorrent",
-		CreatedOn: time.Now().Unix(),
+		CreatedOn: time.Now().UnixNano(),
 	}
 }
 

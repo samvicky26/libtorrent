@@ -8,7 +8,7 @@ import (
 )
 
 var ActiveCount = 3
-var QueueTimeout = int64((30 * time.Minute).Seconds())
+var QueueTimeout = (30 * time.Minute).Nanoseconds()
 
 var queue map[*torrent.Torrent]int64
 
@@ -44,6 +44,8 @@ func queueStart(t *torrent.Torrent) bool {
 	// older torrent will be removed first
 	sort.Sort(Int64Slice(l))
 
+	now := time.Now().UnixNano()
+
 	// t is downloading?
 	if t.Info() == nil || !pendingCompleted(t) {
 		// try to find seeding torrent
@@ -52,7 +54,7 @@ func queueStart(t *torrent.Torrent) bool {
 			// m is seeding?
 			if m.Info() != nil && pendingCompleted(m) {
 				stopTorrent(m)
-				queue[m] = time.Now().Unix()
+				queue[m] = now
 				return startTorrent(t)
 			}
 		}
@@ -60,7 +62,7 @@ func queueStart(t *torrent.Torrent) bool {
 		for _, v := range l {
 			m := q[v]
 			stopTorrent(m)
-			queue[m] = time.Now().Unix()
+			queue[m] = now
 			return startTorrent(t)
 		}
 	} else {
@@ -69,20 +71,20 @@ func queueStart(t *torrent.Torrent) bool {
 			m := q[v]
 			if m.Info() != nil && pendingCompleted(m) {
 				stopTorrent(m)
-				queue[m] = time.Now().Unix()
+				queue[m] = now
 				return startTorrent(t)
 			}
 		}
 	}
 
 	// seems like we are seeding, and have no slots, just queue
-	queue[t] = time.Now().Unix()
+	queue[t] = now
 	return true
 }
 
 // 30 min seeding, download complete, 30 min stole torrent.
 func queueNext(t *torrent.Torrent) bool {
-	now := time.Now().Unix()
+	now := time.Now().UnixNano()
 
 	q := make(map[int64]*torrent.Torrent)
 	var l []int64

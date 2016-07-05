@@ -31,15 +31,16 @@ func TorrentFilesCount(i int) int {
 
 	fs.Files = nil
 
-	ff := t.Files()
-
 	info := t.Info()
+	if info == nil {
+		return 0
+	}
 
 	if fs.Checks == nil {
 		fillFilesInfo(info, fs)
 	}
 
-	for i, v := range ff {
+	for i, v := range t.Files() {
 		p := File{}
 		p.Check = fs.Checks[i]
 		p.Path = v.Path()
@@ -135,7 +136,7 @@ func fileUpdateCheck(t *torrent.Torrent) {
 		return true
 	})
 
-	now := time.Now().Unix()
+	now := time.Now().UnixNano()
 
 	if pendingBytesCompleted(t, fb) < pendingBytesLength(t, fb) {
 		// now we downloading
