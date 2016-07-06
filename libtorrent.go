@@ -148,7 +148,10 @@ func CreateTorrent(p string) int {
 		AnnounceList: builtinAnnounceList,
 	}
 
-	mi.SetDefaults()
+	mi.Comment = ""
+	mi.CreatedBy = "libtorrent"
+	mi.CreationDate = time.Now().Unix()
+	mi.Info.PieceLength = 256 * 1024
 
 	err = mi.Info.BuildFromFilePath(p)
 	if err != nil {
@@ -166,7 +169,7 @@ func CreateTorrent(p string) int {
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
-	fs.CreatedOn = mi.CreationDate
+	fs.CreatedOn = (time.Duration(mi.CreationDate) * time.Second).Nanoseconds()
 
 	t, err = client.AddTorrent(mi)
 	if err != nil {

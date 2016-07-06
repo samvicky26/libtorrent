@@ -93,7 +93,7 @@ func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
 
 	if t.Info() != nil {
 		s.MetaInfo = &metainfo.MetaInfo{
-			CreationDate: fs.CreatedOn,
+			CreationDate: int64((time.Duration(fs.CreatedOn) * time.Nanosecond).Seconds()),
 			Comment:      fs.Comment,
 			CreatedBy:    fs.Creator,
 			AnnounceList: t.AnnounceList(),
