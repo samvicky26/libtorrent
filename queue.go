@@ -24,6 +24,8 @@ func (p Int64Slice) Sort() { sort.Sort(p) }
 
 // priority start torrent. downloading torrent goes first, seeding second.
 func queueStart(t *torrent.Torrent) bool {
+	delete(queue, t)
+
 	if client.ActiveCount() < ActiveCount {
 		return startTorrent(t)
 	}
@@ -43,8 +45,7 @@ func queueStart(t *torrent.Torrent) bool {
 
 	now := time.Now().UnixNano()
 
-	// t is downloading?
-	if !pendingCompleted(t) {
+	if !pendingCompleted(t) { // t is downloading
 		// try to find seeding torrent
 		for _, v := range l {
 			m := q[v]
@@ -62,11 +63,11 @@ func queueStart(t *torrent.Torrent) bool {
 			queue[m] = now
 			return startTorrent(t)
 		}
-	} else {
+	} else { // t is seeding
 		// try to find first seeding torrent to replace with
 		for _, v := range l {
 			m := q[v]
-			if pendingCompleted(m) {
+			if pendingCompleted(m) { // seeding
 				stopTorrent(m)
 				queue[m] = now
 				return startTorrent(t)
@@ -74,9 +75,9 @@ func queueStart(t *torrent.Torrent) bool {
 		}
 	}
 
-	// seems like we are seeding, and have no slots, just queue and downloading.
+	// seems like t seeding, and have no slots, just queue and downloading.
 
-	// try to find first downloading torrent to replace with. download will be resumed after 't' removed by timeout.
+	// try to find first active torrent to replace with. if 't' seeding downloading will be resumed after 't' removed by timeout.
 	for _, v := range l {
 		m := q[v]
 		stopTorrent(m)
@@ -84,6 +85,7 @@ func queueStart(t *torrent.Torrent) bool {
 		return startTorrent(t)
 	}
 
+	// len(l) can't be == 0 should never be here
 	queue[t] = now
 	return true
 }
@@ -169,6 +171,7 @@ func queueNext(t *torrent.Torrent) bool {
 		m := q[v]
 		if !pendingCompleted(m) {
 			if startTorrent(m) {
+				delete(queue, m)
 				if t != nil {
 					stopTorrent(t)
 					queue[t] = now
@@ -184,6 +187,7 @@ func queueNext(t *torrent.Torrent) bool {
 		m := q[v]
 		if pendingCompleted(m) {
 			if startTorrent(m) {
+				delete(queue, m)
 				if t != nil {
 					stopTorrent(t)
 					queue[t] = now
@@ -212,6 +216,7 @@ func queueNext(t *torrent.Torrent) bool {
 				// m - downloading in queue?
 				if !pendingCompleted(m) {
 					if startTorrent(m) {
+						delete(queue, m)
 						stopTorrent(t)
 						queue[t] = now
 						return true

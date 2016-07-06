@@ -377,8 +377,6 @@ func StartTorrent(i int) bool {
 func startTorrent(t *torrent.Torrent) bool {
 	fs := filestorage[t.InfoHash()]
 
-	delete(queue, t)
-
 	err = client.StartTorrent(t)
 	if err != nil {
 		return false
@@ -487,7 +485,6 @@ func stopTorrent(t *torrent.Torrent) {
 		fs.ActivateDate = now
 	} else {
 		t.Stop()
-		delete(queue, t)
 	}
 }
 
@@ -573,6 +570,8 @@ func unregister(i int) {
 	torrentstorageLock.Lock()
 	delete(torrentstorage, t.InfoHash())
 	torrentstorageLock.Unlock()
+
+	delete(queue, t)
 
 	delete(torrents, i)
 }
