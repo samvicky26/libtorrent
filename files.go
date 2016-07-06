@@ -133,7 +133,6 @@ func fileUpdateCheck(t *torrent.Torrent) {
 
 	if pendingBytesCompleted(t, fb) < pendingBytesLength(t, fb) { // now we downloading
 		fs.CompletedDate = 0
-		fs.Completed.Clear()
 		// did we seed before? update seed timer
 		if seeding {
 			fs.SeedingTime = fs.SeedingTime + (now - fs.ActivateDate)

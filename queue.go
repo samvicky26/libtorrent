@@ -99,28 +99,32 @@ func queueStart(t *torrent.Torrent) bool {
 }
 
 func queueEngine(t *torrent.Torrent) {
+	mu.Lock()
 	fs := filestorage[t.InfoHash()]
-
-	completed := t.Info() != nil && pendingCompleted(t)
+	mu.Unlock()
 
 	timeout := time.Duration(QueueTimeout) * time.Nanosecond
 	for {
 		b1 := t.BytesCompleted()
-		if completed {
-			// it is already completed. do not wait for completed event
-			select {
-			case <-time.After(timeout):
-			case <-t.Wait():
-				return
+		// in case if user set file to download on the same torrent, we need to receive Completed again.
+		torrentstorageLock.Lock()
+		ts := torrentstorage[t.InfoHash()]
+		ts.completed.Clear()
+		torrentstorageLock.Unlock()
+		select {
+		case <-time.After(timeout):
+		case <-ts.completed.LockedChan(&mu):
+			mu.Lock()
+			// we will be first who knows torrent is complete, and moved from active (downloading) state.
+			if fs.CompletedDate == 0 {
+				now := time.Now().UnixNano()
+				fs.CompletedDate = now
+				fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
+				fs.ActivateDate = now // seeding time now
 			}
-		} else {
-			// wait for completed event
-			select {
-			case <-time.After(timeout):
-			case <-fs.Completed.LockedChan(&mu):
-			case <-t.Wait():
-				return
-			}
+			mu.Unlock()
+		case <-t.Wait():
+			return
 		}
 		timeout = time.Duration(QueueTimeout) * time.Nanosecond
 		mu.Lock()

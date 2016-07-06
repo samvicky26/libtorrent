@@ -384,11 +384,6 @@ func startTorrent(t *torrent.Torrent) bool {
 		return false
 	}
 
-	torrentstorageLock.Lock()
-	ts := torrentstorage[t.InfoHash()]
-	ts.active = true
-	torrentstorageLock.Unlock()
-
 	fs.ActivateDate = time.Now().UnixNano()
 
 	go func() {
@@ -479,11 +474,6 @@ func StopTorrent(i int) {
 
 func stopTorrent(t *torrent.Torrent) {
 	fs := filestorage[t.InfoHash()]
-
-	torrentstorageLock.Lock()
-	ts := torrentstorage[t.InfoHash()]
-	ts.active = false
-	torrentstorageLock.Unlock()
 
 	if client.ActiveTorrent(t) {
 		t.Drop()
