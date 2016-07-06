@@ -85,6 +85,21 @@ func (m *torrentStorage) Pieces() []bool {
 	return bf
 }
 
+func (m *torrentStorage) Completed() {
+	fb := filePendingBitmapTs(m.info, m.checks)
+
+	m.completed = true
+
+	// run thougth all pieces and check they all present in m.completedPieces
+	fb.IterTyped(func(piece int) (again bool) {
+		if !m.completedPieces.Contains(piece) {
+			m.completed = false
+			return false
+		}
+		return true
+	})
+}
+
 var torrentstorage map[metainfo.Hash]*torrentStorage
 var torrentstorageLock sync.Mutex
 
@@ -109,6 +124,9 @@ func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, err
 			ts.checks[i] = true
 		}
 	}
+
+	// update comleted after torrent open
+	ts.Completed()
 
 	return fileTorrentStorage{ts}, nil
 }
@@ -159,18 +177,7 @@ func (m *fileStoragePiece) MarkComplete() error {
 		return nil
 	}
 
-	fb := filePendingBitmapTs(m.info, m.checks)
-
-	m.completed = true
-
-	// run thougth all pieces and check they all present in m.completedPieces
-	fb.IterTyped(func(piece int) (again bool) {
-		if !m.completedPieces.Contains(piece) {
-			m.completed = false
-			return false
-		}
-		return true
-	})
+	m.Completed()
 
 	if m.completed {
 		m.next.Set()
