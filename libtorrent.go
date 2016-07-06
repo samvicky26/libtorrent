@@ -246,7 +246,7 @@ func AddTorrentFromURL(path string, url string) int {
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
-	fs.CreatedOn = mi.CreationDate
+	fs.CreatedOn = (time.Duration(mi.CreationDate) * time.Second).Nanoseconds()
 
 	t, err = client.AddTorrent(mi)
 	if err != nil {
@@ -284,7 +284,7 @@ func AddTorrentFromFile(path string, file string) int {
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
-	fs.CreatedOn = mi.CreationDate
+	fs.CreatedOn = (time.Duration(mi.CreationDate) * time.Second).Nanoseconds()
 
 	t, err = client.AddTorrent(mi)
 	if err != nil {
@@ -320,7 +320,7 @@ func AddTorrentFromBytes(path string, buf []byte) int {
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
-	fs.CreatedOn = mi.CreationDate
+	fs.CreatedOn = (time.Duration(mi.CreationDate) * time.Second).Nanoseconds()
 
 	t, err = client.AddTorrent(mi)
 	if err != nil {
