@@ -175,6 +175,14 @@ func filePendingBitmapTs(info *metainfo.InfoEx, checks []bool) *bitmap.Bitmap {
 	return &bm
 }
 
+func PendingCompleted(i int) bool {
+	mu.Lock()
+	defer mu.Unlock()
+
+	t := torrents[i]
+	return pendingCompleted(t)
+}
+
 func pendingCompleted(t *torrent.Torrent) bool {
 	info := t.Info()
 	if info == nil {
