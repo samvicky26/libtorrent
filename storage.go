@@ -60,10 +60,9 @@ func registerFileStorage(info metainfo.Hash, path string) *fileStorage {
 }
 
 type torrentStorage struct {
-	active          bool
+	info            *metainfo.InfoEx
 	path            string
 	checks          []bool
-	info            *metainfo.InfoEx
 	completedPieces bitmap.Bitmap
 	// fired when torrent downloaded, used for queue engine to roll downloads
 	completed bool
