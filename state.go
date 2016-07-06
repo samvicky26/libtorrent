@@ -133,17 +133,8 @@ func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
 	if t.Info() != nil {
 		torrentstorageLock.Lock()
 		ts := torrentstorage[t.InfoHash()]
-
-		bf := make([]bool, t.Info().NumPieces())
-		ts.completedPieces.IterTyped(func(piece int) (again bool) {
-			bf[piece] = true
-			return true
-		})
-		s.Pieces = bf
-
-		s.Checks = make([]bool, len(ts.checks))
-		copy(s.Checks, ts.checks)
-
+		s.Pieces = ts.Pieces()
+		s.Checks = ts.Checks()
 		torrentstorageLock.Unlock()
 	}
 

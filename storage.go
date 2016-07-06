@@ -66,7 +66,23 @@ type torrentStorage struct {
 	info            *metainfo.InfoEx
 	completedPieces bitmap.Bitmap
 	// fired when torrent downloaded, used for queue engine to roll downloads
-	completed missinggo.Event
+	completed bool
+	next      missinggo.Event
+}
+
+func (m *torrentStorage) Checks() []bool {
+	checks := make([]bool, len(m.checks))
+	copy(checks, m.checks)
+	return checks
+}
+
+func (m *torrentStorage) Pieces() []bool {
+	bf := make([]bool, m.info.NumPieces())
+	m.completedPieces.IterTyped(func(piece int) (again bool) {
+		bf[piece] = true
+		return true
+	})
+	return bf
 }
 
 var torrentstorage map[metainfo.Hash]*torrentStorage
@@ -139,21 +155,25 @@ func (m *fileStoragePiece) MarkComplete() error {
 	defer torrentstorageLock.Unlock()
 	m.completedPieces.Set(m.p.Index(), true)
 
+	if m.completed {
+		return nil
+	}
+
 	fb := filePendingBitmapTs(m.info, m.checks)
 
-	completed := true
+	m.completed = true
 
 	// run thougth all pieces and check they all present in m.completedPieces
 	fb.IterTyped(func(piece int) (again bool) {
 		if !m.completedPieces.Contains(piece) {
-			completed = false
+			m.completed = false
 			return false
 		}
 		return true
 	})
 
-	if completed {
-		m.completed.Set()
+	if m.completed {
+		m.next.Set()
 	}
 
 	return nil
