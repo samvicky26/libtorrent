@@ -153,14 +153,17 @@ func filePendingBitmap(info *metainfo.InfoEx) *bitmap.Bitmap {
 	torrentstorageLock.Lock()
 	defer torrentstorageLock.Unlock()
 	ts := torrentstorage[info.Hash()]
+	return filePendingBitmapTs(info, ts.checks)
+}
 
+func filePendingBitmapTs(info *metainfo.InfoEx, checks []bool) *bitmap.Bitmap {
 	var bm bitmap.Bitmap
 
 	var offset int64
 	for i, fi := range info.UpvertedFiles() {
 		s := offset / info.PieceLength
 		e := (offset+fi.Length)/info.PieceLength + 1
-		if ts.checks[i] {
+		if checks[i] {
 			bm.AddRange(int(s), int(e))
 		}
 		offset += fi.Length

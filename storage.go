@@ -139,7 +139,7 @@ func (m *fileStoragePiece) MarkComplete() error {
 	defer torrentstorageLock.Unlock()
 	m.completedPieces.Set(m.p.Index(), true)
 
-	fb := filePendingBitmap(m.info)
+	fb := filePendingBitmapTs(m.info, m.checks)
 
 	completed := true
 
