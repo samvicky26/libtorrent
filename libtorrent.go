@@ -484,6 +484,7 @@ func stopTorrent(t *torrent.Torrent) {
 		} else {
 			fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
 		}
+		fs.ActivateDate = now
 	} else {
 		t.Stop()
 		delete(queue, t)

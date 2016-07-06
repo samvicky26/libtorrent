@@ -31,7 +31,6 @@ func queueStart(t *torrent.Torrent) bool {
 	// build active torrent array with activate time
 	q := make(map[int64]*torrent.Torrent)
 	var l []int64
-
 	for _, m := range torrents {
 		if client.ActiveTorrent(m) {
 			fs := filestorage[m.InfoHash()]
@@ -40,19 +39,17 @@ func queueStart(t *torrent.Torrent) bool {
 			l = append(l, v)
 		}
 	}
-
-	// older torrent will be removed first
-	sort.Sort(Int64Slice(l))
+	sort.Sort(Int64Slice(l)) // older torrent will be removed first
 
 	now := time.Now().UnixNano()
 
 	// t is downloading?
-	if t.Info() == nil || !pendingCompleted(t) {
+	if !pendingCompleted(t) {
 		// try to find seeding torrent
 		for _, v := range l {
 			m := q[v]
 			// m is seeding?
-			if m.Info() != nil && pendingCompleted(m) {
+			if pendingCompleted(m) {
 				stopTorrent(m)
 				queue[m] = now
 				return startTorrent(t)
@@ -69,7 +66,7 @@ func queueStart(t *torrent.Torrent) bool {
 		// try to find first seeding torrent to replace with
 		for _, v := range l {
 			m := q[v]
-			if m.Info() != nil && pendingCompleted(m) {
+			if pendingCompleted(m) {
 				stopTorrent(m)
 				queue[m] = now
 				return startTorrent(t)
@@ -79,7 +76,7 @@ func queueStart(t *torrent.Torrent) bool {
 
 	// seems like we are seeding, and have no slots, just queue and downloading.
 
-	// try to find first downloadin torrent to replace with
+	// try to find first downloading torrent to replace with. download will be resumed after 't' removed by timeout.
 	for _, v := range l {
 		m := q[v]
 		stopTorrent(m)
@@ -87,13 +84,6 @@ func queueStart(t *torrent.Torrent) bool {
 		return startTorrent(t)
 	}
 
-	// wtf? we are here. ok queue it
-	if _, ok := queue[t]; ok {
-		delete(queue, t)
-		return true
-	}
-
-	// wtf? we still here? ok queue it
 	queue[t] = now
 	return true
 }
@@ -125,8 +115,7 @@ func queueEngine(t *torrent.Torrent) {
 		}
 		timeout = time.Duration(QueueTimeout) * time.Nanosecond
 		mu.Lock()
-		s := torrentStatus(t)
-		if s == StatusSeeding {
+		if pendingCompleted(t) { // seeding
 			if queueNext(t) {
 				// we been removed, stop queue engine
 				mu.Unlock()
@@ -138,8 +127,7 @@ func queueEngine(t *torrent.Torrent) {
 					timeout = 1 * time.Minute
 				}
 			}
-		}
-		if s == StatusDownloading {
+		} else { // downloading
 			// check stalled, and rotate if it does
 			b2 := t.BytesCompleted()
 			if b1 == b2 {
@@ -164,28 +152,22 @@ func queueEngine(t *torrent.Torrent) {
 func queueNext(t *torrent.Torrent) bool {
 	now := time.Now().UnixNano()
 
+	// build active torrent array with activate time
 	q := make(map[int64]*torrent.Torrent)
 	var l []int64
-
 	for m, v := range queue {
-		if client.ActiveCount() < ActiveCount { // queue all
-			q[v] = m
-			l = append(l, v)
-		} else if v+QueueTimeout <= now { // keep torrent resting for 30 mins
-			// duplicates are lost
+		// queue all || keep torrent resting for 30 mins
+		if client.ActiveCount() < ActiveCount || v+QueueTimeout <= now {
 			q[v] = m
 			l = append(l, v)
 		}
 	}
-
-	// older first
-	sort.Sort(Int64Slice(l))
+	sort.Sort(Int64Slice(l)) // older first
 
 	// check for downloading queue torrents
 	for _, v := range l {
 		m := q[v]
-
-		if m.Info() == nil || !pendingCompleted(m) {
+		if !pendingCompleted(m) {
 			if startTorrent(m) {
 				if t != nil {
 					stopTorrent(t)
@@ -200,7 +182,7 @@ func queueNext(t *torrent.Torrent) bool {
 	// check for seeding queue
 	for _, v := range l {
 		m := q[v]
-		if m.Info() != nil && pendingCompleted(m) {
+		if pendingCompleted(m) {
 			if startTorrent(m) {
 				if t != nil {
 					stopTorrent(t)
@@ -214,24 +196,21 @@ func queueNext(t *torrent.Torrent) bool {
 
 	if t != nil {
 		// is 't' seeding torrent? if here any downloading, queue it, regardless on timeout
-		if t.Info() != nil && pendingCompleted(t) {
-			// load all torrents
+		if pendingCompleted(t) {
+			// load all torrents, we will take most oldest added to the queue
 			q := make(map[int64]*torrent.Torrent)
 			var l []int64
-
 			// add all from queue
 			for m, v := range queue {
 				q[v] = m
 				l = append(l, v)
 			}
-
-			// older first
-			sort.Sort(Int64Slice(l))
+			sort.Sort(Int64Slice(l)) // older first
 
 			for _, v := range l {
 				m := q[v]
 				// m - downloading in queue?
-				if m.Info() == nil || !pendingCompleted(m) {
+				if !pendingCompleted(m) {
 					if startTorrent(m) {
 						stopTorrent(t)
 						queue[t] = now
