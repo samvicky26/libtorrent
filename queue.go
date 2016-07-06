@@ -86,6 +86,7 @@ func queueStart(t *torrent.Torrent) bool {
 	}
 
 	// len(l) can't be == 0 should never be here
+	stopTorrent(t)
 	queue[t] = now
 	return true
 }
