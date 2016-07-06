@@ -475,7 +475,6 @@ func stopTorrent(t *torrent.Torrent) {
 
 	if client.ActiveTorrent(t) {
 		t.Drop()
-
 		now := time.Now().UnixNano()
 		if t.Seeding() {
 			fs.SeedingTime = fs.SeedingTime + (now - fs.ActivateDate)
