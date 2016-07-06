@@ -95,11 +95,11 @@ func queueEngine(t *torrent.Torrent) {
 		// in case if user set file to download on the same torrent, we need to receive Completed again.
 		torrentstorageLock.Lock()
 		ts := torrentstorage[t.InfoHash()]
-		ts.completed.Clear()
+		ts.next.Clear()
 		torrentstorageLock.Unlock()
 		select {
 		case <-time.After(timeout):
-		case <-ts.completed.LockedChan(&mu):
+		case <-ts.next.LockedChan(&mu):
 			mu.Lock()
 			fs := filestorage[t.InfoHash()]
 			// we will be first who knows torrent is complete, and moved from active (downloading) state.

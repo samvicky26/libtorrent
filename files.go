@@ -138,6 +138,11 @@ func fileUpdateCheck(t *torrent.Torrent) {
 	now := time.Now().UnixNano()
 
 	if pendingBytesCompleted(t, fb) < pendingBytesLength(t, fb) { // now we downloading
+		torrentstorageLock.Lock()
+		ts := torrentstorage[t.InfoHash()]
+		ts.completed = false
+		torrentstorageLock.Unlock()
+
 		fs.CompletedDate = 0
 		// did we seed before? update seed timer
 		if seeding {
