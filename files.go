@@ -129,7 +129,7 @@ func fileUpdateCheck(t *torrent.Torrent) {
 		return true
 	})
 
-	now := time.Now().Unix()
+	now := time.Now().UnixNano()
 
 	if pendingBytesCompleted(t, fb) < pendingBytesLength(t, fb) { // now we downloading
 		fs.CompletedDate = 0

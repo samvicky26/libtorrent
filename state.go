@@ -87,7 +87,7 @@ type TorrentState struct {
 
 // Save torrent to state file
 func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
-	s := TorrentState{Version: 2}
+	s := TorrentState{Version: 3}
 
 	fs := filestorage[t.InfoHash()]
 
@@ -107,7 +107,7 @@ func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
 	}
 
 	if client.ActiveTorrent(t) {
-		now := time.Now().Unix()
+		now := time.Now().UnixNano()
 		if t.Seeding() {
 			fs.SeedingTime = fs.SeedingTime + (now - fs.ActivateDate)
 		} else {
@@ -156,6 +156,15 @@ func loadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	err = json.Unmarshal(buf, &s)
 	if err != nil {
 		return
+	}
+
+	switch s.Version {
+	case 1, 2:
+		s.AddedDate = (time.Duration(s.AddedDate) * time.Second).Nanoseconds()
+		s.CompletedDate = (time.Duration(s.CompletedDate) * time.Second).Nanoseconds()
+		s.DownloadingTime = (time.Duration(s.DownloadingTime) * time.Second).Nanoseconds()
+		s.SeedingTime = (time.Duration(s.SeedingTime) * time.Second).Nanoseconds()
+		s.CreatedOn = (time.Duration(s.CreatedOn) * time.Second).Nanoseconds()
 	}
 
 	var spec *torrent.TorrentSpec

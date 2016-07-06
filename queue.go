@@ -8,7 +8,7 @@ import (
 )
 
 var ActiveCount = 3
-var QueueTimeout = int64((30 * time.Minute).Seconds())
+var QueueTimeout = (30 * time.Minute).Nanoseconds()
 
 var queue map[*torrent.Torrent]int64
 
@@ -44,7 +44,7 @@ func queueStart(t *torrent.Torrent) bool {
 	// older torrent will be removed first
 	sort.Sort(Int64Slice(l))
 
-	now := time.Now().Unix()
+	now := time.Now().UnixNano()
 
 	// t is downloading?
 	if t.Info() == nil || !pendingCompleted(t) {
@@ -103,7 +103,7 @@ func queueEngine(t *torrent.Torrent) {
 
 	completed := t.Info() != nil && pendingCompleted(t)
 
-	timeout := time.Duration(QueueTimeout) * time.Second
+	timeout := time.Duration(QueueTimeout) * time.Nanosecond
 	for {
 		b1 := t.BytesCompleted()
 		if completed {
@@ -122,7 +122,7 @@ func queueEngine(t *torrent.Torrent) {
 				return
 			}
 		}
-		timeout = time.Duration(QueueTimeout) * time.Second
+		timeout = time.Duration(QueueTimeout) * time.Nanosecond
 		mu.Lock()
 		s := torrentStatus(t)
 		if s == StatusSeeding {
@@ -161,7 +161,7 @@ func queueEngine(t *torrent.Torrent) {
 
 // 30 min seeding, download complete, 30 min stole torrent.
 func queueNext(t *torrent.Torrent) bool {
-	now := time.Now().Unix()
+	now := time.Now().UnixNano()
 
 	q := make(map[int64]*torrent.Torrent)
 	var l []int64

@@ -389,7 +389,7 @@ func startTorrent(t *torrent.Torrent) bool {
 	ts.active = true
 	torrentstorageLock.Unlock()
 
-	fs.ActivateDate = time.Now().Unix()
+	fs.ActivateDate = time.Now().UnixNano()
 
 	go func() {
 		select {
@@ -401,7 +401,7 @@ func startTorrent(t *torrent.Torrent) bool {
 		mu.Lock()
 		defer mu.Unlock()
 
-		now := time.Now().Unix()
+		now := time.Now().UnixNano()
 		fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
 		fs.ActivateDate = now
 
@@ -434,7 +434,7 @@ func DownloadMetadata(i int) bool {
 		return false
 	}
 
-	fs.ActivateDate = time.Now().Unix()
+	fs.ActivateDate = time.Now().UnixNano()
 
 	go func() {
 		select {
@@ -446,7 +446,7 @@ func DownloadMetadata(i int) bool {
 		mu.Lock()
 		defer mu.Unlock()
 
-		now := time.Now().Unix()
+		now := time.Now().UnixNano()
 		fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
 		fs.ActivateDate = now
 
@@ -488,7 +488,7 @@ func stopTorrent(t *torrent.Torrent) {
 	if client.ActiveTorrent(t) {
 		t.Drop()
 
-		now := time.Now().Unix()
+		now := time.Now().UnixNano()
 		if t.Seeding() {
 			fs.SeedingTime = fs.SeedingTime + (now - fs.ActivateDate)
 		} else {

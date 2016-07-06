@@ -49,11 +49,11 @@ func registerFileStorage(info metainfo.Hash, path string) *fileStorage {
 	torrentstorageLock.Unlock()
 
 	fs := &fileStorage{
-		AddedDate: time.Now().Unix(),
+		AddedDate: time.Now().UnixNano(),
 
 		Comment:   "dynamic metainfo from client",
 		Creator:   "go.libtorrent",
-		CreatedOn: time.Now().Unix(),
+		CreatedOn: time.Now().UnixNano(),
 	}
 
 	filestorage[info] = fs
@@ -164,7 +164,7 @@ func (m *fileStoragePiece) MarkComplete() error {
 			if m.active {
 				// mark CompletedDate only when from active state (not cheking)
 				if fs.CompletedDate == 0 {
-					now := time.Now().Unix()
+					now := time.Now().UnixNano()
 					fs.CompletedDate = now
 					fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
 					fs.ActivateDate = now // seeding time now
