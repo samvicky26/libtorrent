@@ -1,5 +1,9 @@
 package libtorrent
 
+import (
+	"time"
+)
+
 type Tracker struct {
 	// Tracker URI or DHT, LSD, PE
 	Addr         string
@@ -23,7 +27,10 @@ func TorrentTrackersCount(i int) int {
 	f := filestorage[t.InfoHash()]
 	f.Trackers = nil
 	for _, v := range t.Trackers() {
-		f.Trackers = append(f.Trackers, Tracker{v.Url, v.Err, v.LastAnnounce, v.NextAnnounce, v.Peers, 0, 0, 0, 0})
+		f.Trackers = append(f.Trackers, Tracker{v.Url, v.Err,
+			(time.Duration(v.LastAnnounce) * time.Second).Nanoseconds(),
+			(time.Duration(v.NextAnnounce) * time.Second).Nanoseconds(),
+			v.Peers, 0, 0, 0, 0})
 	}
 	return len(f.Trackers)
 }

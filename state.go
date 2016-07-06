@@ -160,10 +160,10 @@ func loadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 
 	switch s.Version {
 	case 1:
-		version1to2(s)
-		version2to3(s)
+		version1to2(&s)
+		version2to3(&s)
 	case 2:
-		version2to3(s)
+		version2to3(&s)
 	}
 
 	var spec *torrent.TorrentSpec
@@ -231,11 +231,11 @@ func loadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 	return
 }
 
-func version1to2(s TorrentState) {
+func version1to2(s *TorrentState) {
 	// no changes between format 1..2
 }
 
-func version2to3(s TorrentState) {
+func version2to3(s *TorrentState) {
 	s.AddedDate = (time.Duration(s.AddedDate) * time.Second).Nanoseconds()
 	s.CompletedDate = (time.Duration(s.CompletedDate) * time.Second).Nanoseconds()
 	s.DownloadingTime = (time.Duration(s.DownloadingTime) * time.Second).Nanoseconds()
