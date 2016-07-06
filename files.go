@@ -29,6 +29,7 @@ func TorrentFilesCount(i int) int {
 		return 0
 	}
 
+	// we can copy it here, or unlock MarkComplete() operation in the client.go
 	torrentstorageLock.Lock()
 	ts := torrentstorage[t.InfoHash()]
 	checks := make([]bool, len(ts.checks))
