@@ -30,10 +30,13 @@ func TorrentFilesCount(i int) int {
 	}
 
 	// we can copy it here, or unlock MarkComplete() operation in the client.go
+	// library (lock) -- torrent (lock) -- storage (lock)
+	//
+	// library -> torrentstorageLock
+	// net -> torrent -> storage -> torrentstorageLock
 	torrentstorageLock.Lock()
 	ts := torrentstorage[t.InfoHash()]
-	checks := make([]bool, len(ts.checks))
-	copy(checks, ts.checks)
+	checks := ts.Checks()
 	torrentstorageLock.Unlock()
 
 	for i, v := range t.Files() {

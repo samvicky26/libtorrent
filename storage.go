@@ -69,6 +69,21 @@ type torrentStorage struct {
 	completed missinggo.Event
 }
 
+func (m *torrentStorage) Checks() []bool {
+	checks := make([]bool, len(m.checks))
+	copy(checks, m.checks)
+	return checks
+}
+
+func (m *torrentStorage) Pieces() []bool {
+	bf := make([]bool, m.info.NumPieces())
+	m.completedPieces.IterTyped(func(piece int) (again bool) {
+		bf[piece] = true
+		return true
+	})
+	return bf
+}
+
 var torrentstorage map[metainfo.Hash]*torrentStorage
 var torrentstorageLock sync.Mutex
 
