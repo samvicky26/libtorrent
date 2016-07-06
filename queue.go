@@ -99,10 +99,6 @@ func queueStart(t *torrent.Torrent) bool {
 }
 
 func queueEngine(t *torrent.Torrent) {
-	mu.Lock()
-	fs := filestorage[t.InfoHash()]
-	mu.Unlock()
-
 	timeout := time.Duration(QueueTimeout) * time.Nanosecond
 	for {
 		b1 := t.BytesCompleted()
@@ -115,6 +111,7 @@ func queueEngine(t *torrent.Torrent) {
 		case <-time.After(timeout):
 		case <-ts.completed.LockedChan(&mu):
 			mu.Lock()
+			fs := filestorage[t.InfoHash()]
 			// we will be first who knows torrent is complete, and moved from active (downloading) state.
 			if fs.CompletedDate == 0 {
 				now := time.Now().UnixNano()
