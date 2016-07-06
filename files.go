@@ -29,13 +29,16 @@ func TorrentFilesCount(i int) int {
 		return 0
 	}
 
+	// we can copy it here, or unlock MarkComplete() operation in the client.go
 	torrentstorageLock.Lock()
-	defer torrentstorageLock.Unlock()
 	ts := torrentstorage[t.InfoHash()]
+	checks := make([]bool, len(ts.checks))
+	copy(checks, ts.checks)
+	torrentstorageLock.Unlock()
 
 	for i, v := range t.Files() {
 		p := File{}
-		p.Check = ts.checks[i]
+		p.Check = checks[i]
 		p.Path = v.Path()
 		v.Offset()
 		p.Length = v.Length()
@@ -129,11 +132,10 @@ func fileUpdateCheck(t *torrent.Torrent) {
 		return true
 	})
 
-	now := time.Now().Unix()
+	now := time.Now().UnixNano()
 
 	if pendingBytesCompleted(t, fb) < pendingBytesLength(t, fb) { // now we downloading
 		fs.CompletedDate = 0
-		fs.Completed.Clear()
 		// did we seed before? update seed timer
 		if seeding {
 			fs.SeedingTime = fs.SeedingTime + (now - fs.ActivateDate)
@@ -154,14 +156,17 @@ func filePendingBitmap(info *metainfo.InfoEx) *bitmap.Bitmap {
 	torrentstorageLock.Lock()
 	defer torrentstorageLock.Unlock()
 	ts := torrentstorage[info.Hash()]
+	return filePendingBitmapTs(info, ts.checks)
+}
 
+func filePendingBitmapTs(info *metainfo.InfoEx, checks []bool) *bitmap.Bitmap {
 	var bm bitmap.Bitmap
 
 	var offset int64
 	for i, fi := range info.UpvertedFiles() {
 		s := offset / info.PieceLength
 		e := (offset+fi.Length)/info.PieceLength + 1
-		if ts.checks[i] {
+		if checks[i] {
 			bm.AddRange(int(s), int(e))
 		}
 		offset += fi.Length

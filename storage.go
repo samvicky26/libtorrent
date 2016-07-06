@@ -32,8 +32,6 @@ type fileStorage struct {
 	// dates in seconds
 	AddedDate     int64
 	CompletedDate int64
-	// fired when torrent downloaded
-	Completed missinggo.Event
 
 	// .torrent info
 	Creator   string
@@ -49,11 +47,11 @@ func registerFileStorage(info metainfo.Hash, path string) *fileStorage {
 	torrentstorageLock.Unlock()
 
 	fs := &fileStorage{
-		AddedDate: time.Now().Unix(),
+		AddedDate: time.Now().UnixNano(),
 
 		Comment:   "dynamic metainfo from client",
 		Creator:   "go.libtorrent",
-		CreatedOn: time.Now().Unix(),
+		CreatedOn: time.Now().UnixNano(),
 	}
 
 	filestorage[info] = fs
@@ -67,6 +65,8 @@ type torrentStorage struct {
 	checks          []bool
 	info            *metainfo.InfoEx
 	completedPieces bitmap.Bitmap
+	// fired when torrent downloaded, used for queue engine to roll downloads
+	completed missinggo.Event
 }
 
 var torrentstorage map[metainfo.Hash]*torrentStorage
@@ -139,40 +139,22 @@ func (m *fileStoragePiece) MarkComplete() error {
 	defer torrentstorageLock.Unlock()
 	m.completedPieces.Set(m.p.Index(), true)
 
-	// we need to fire fs.Completed after go.torrent unlocked
-	go func() {
-		mu.Lock()
-		defer mu.Unlock()
+	fb := filePendingBitmapTs(m.info, m.checks)
 
-		fs := filestorage[m.info.Hash()]
+	completed := true
 
-		fb := filePendingBitmap(m.info)
-
-		completed := true
-
-		// run thougth all pieces and check they all present in m.completedPieces
-		fb.IterTyped(func(piece int) (again bool) {
-			if !m.completedPieces.Contains(piece) {
-				completed = false
-				return false
-			}
-			return true
-		})
-
-		if completed {
-			fs.Completed.Set()
-			if m.active {
-				// mark CompletedDate only when from active state (not cheking)
-				if fs.CompletedDate == 0 {
-					now := time.Now().Unix()
-					fs.CompletedDate = now
-					fs.DownloadingTime = fs.DownloadingTime + (now - fs.ActivateDate)
-					fs.ActivateDate = now // seeding time now
-					return
-				}
-			}
+	// run thougth all pieces and check they all present in m.completedPieces
+	fb.IterTyped(func(piece int) (again bool) {
+		if !m.completedPieces.Contains(piece) {
+			completed = false
+			return false
 		}
-	}()
+		return true
+	})
+
+	if completed {
+		m.completed.Set()
+	}
 
 	return nil
 }
