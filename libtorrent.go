@@ -99,6 +99,9 @@ func metainfoCreate(p string) *metainfo.MetaInfo {
 
 	s := walkSize(p)
 
+	private := false
+
+	mi.Info.Private = &private
 	mi.Comment = ""
 	mi.CreatedBy = "libtorrent"
 	mi.CreationDate = time.Now().Unix()
