@@ -15,7 +15,10 @@ import (
 
 var tcpPort string
 var udpPort string
-var refreshPort = 1 * time.Minute
+
+var (
+	RefreshPort = (1 * time.Minute).Nanoseconds()
+)
 
 type PortInfo struct {
 	TCP string
@@ -68,14 +71,16 @@ func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, e
 		ext = port
 	}
 
+	lease := 5 * time.Duration(RefreshPort) * time.Nanosecond
+
 	// try specific port
-	p, err := d.AddPortMapping(proto, port, ext, n, 2*refreshPort)
+	p, err := d.AddPortMapping(proto, port, ext, n, lease)
 	if err == nil {
 		return p, nil
 	}
 
 	// try random port
-	p, err = d.AddPortMapping(proto, port, 0, n, 2*refreshPort)
+	p, err = d.AddPortMapping(proto, port, 0, n, lease)
 	if err == nil {
 		return p, nil
 	}
@@ -85,7 +90,7 @@ func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, e
 		// Then try up to ten random ports.
 		extPort := 1024 + rand.Intn(65535-1024)
 
-		p, err = d.AddPortMapping(proto, port, extPort, n, 2*refreshPort)
+		p, err = d.AddPortMapping(proto, port, extPort, n, lease)
 		if err == nil {
 			return p, nil
 		}

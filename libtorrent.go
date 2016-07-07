@@ -172,7 +172,7 @@ func Create() bool {
 			select {
 			case <-client.Wait():
 				return
-			case <-time.After(refreshPort):
+			case <-time.After(time.Duration(RefreshPort) * time.Nanosecond):
 			}
 			// in go routine do 5 seconds discovery
 			mapping(5 * time.Second)
