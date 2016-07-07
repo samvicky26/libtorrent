@@ -13,7 +13,6 @@ import (
 func TorrentMagnet(i int) string {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	return t.Metainfo().Magnet().String()
 }
@@ -21,7 +20,6 @@ func TorrentMagnet(i int) string {
 func TorrentMetainfo(i int) *metainfo.MetaInfo {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	return t.Metainfo()
 }
@@ -30,7 +28,6 @@ func TorrentMetainfo(i int) *metainfo.MetaInfo {
 func TorrentHash(i int) string {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	h := t.InfoHash()
 	return h.HexString()
@@ -49,7 +46,6 @@ func TorrentName(i int) string {
 func TorrentActive(i int) bool {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	return client.ActiveTorrent(t)
 }
@@ -66,12 +62,8 @@ const (
 func TorrentStatus(i int) int32 {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
-	return torrentStatus(t)
-}
 
-func torrentStatus(t *torrent.Torrent) int32 {
 	if pause != nil {
 		if _, ok := pause[t]; ok {
 			return StatusQueued
@@ -79,6 +71,10 @@ func torrentStatus(t *torrent.Torrent) int32 {
 		return StatusPaused
 	}
 
+	return torrentStatus(t)
+}
+
+func torrentStatus(t *torrent.Torrent) int32 {
 	if client.ActiveTorrent(t) {
 		if t.Info() != nil {
 			// TODO t.Seeding() not working
@@ -104,7 +100,6 @@ func torrentStatus(t *torrent.Torrent) int32 {
 func TorrentBytesLength(i int) int64 {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	return t.Length()
 }
@@ -113,7 +108,6 @@ func TorrentBytesLength(i int) int64 {
 func TorrentBytesCompleted(i int) int64 {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	return t.BytesCompleted()
 }
@@ -122,7 +116,6 @@ func TorrentBytesCompleted(i int) int64 {
 func TorrentPendingBytesLength(i int) int64 {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	fb := filePendingBitmap(t.Info())
 	return pendingBytesLength(t, fb)
@@ -132,7 +125,6 @@ func TorrentPendingBytesLength(i int) int64 {
 func TorrentPendingBytesCompleted(i int) int64 {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	fb := filePendingBitmap(t.Info())
 	return pendingBytesCompleted(t, fb)
@@ -179,7 +171,6 @@ type InfoTorrent struct {
 func TorrentInfo(i int) *InfoTorrent {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 	return &InfoTorrent{fs.Creator, fs.CreatedOn, fs.Comment, fs.AddedDate, fs.CompletedDate}

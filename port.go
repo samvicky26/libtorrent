@@ -9,12 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/anacrolix/missinggo"
 	"github.com/syncthing/syncthing/lib/nat"
 	"github.com/syncthing/syncthing/lib/upnp"
 )
 
 var tcpPort string
 var udpPort string
+
+var mappingStop missinggo.Event
 
 var (
 	RefreshPort = (1 * time.Minute).Nanoseconds()
@@ -206,4 +209,22 @@ func updateClientAddr(addr string) {
 		return
 	}
 	client.SetListenAddr(addr)
+}
+
+func mappingStart() {
+	mu.Lock()
+	mappingStop.Set()
+	mappingStop.Clear()
+	mu.Unlock()
+	for {
+		select {
+		case <-mappingStop.LockedChan(&mu):
+			return
+		case <-client.Wait():
+			return
+		case <-time.After(time.Duration(RefreshPort) * time.Nanosecond):
+		}
+		// in go routine do 5 seconds discovery
+		mapping(5 * time.Second)
+	}
 }
