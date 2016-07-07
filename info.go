@@ -72,6 +72,13 @@ func TorrentStatus(i int) int32 {
 }
 
 func torrentStatus(t *torrent.Torrent) int32 {
+	if pause != nil {
+		if _, ok := pause[t]; ok {
+			return StatusQueued
+		}
+		return StatusPaused
+	}
+
 	if client.ActiveTorrent(t) {
 		if t.Info() != nil {
 			// TODO t.Seeding() not working

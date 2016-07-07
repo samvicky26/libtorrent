@@ -142,6 +142,7 @@ func Create() bool {
 	filestorage = make(map[metainfo.Hash]*fileStorage)
 	torrentstorage = make(map[metainfo.Hash]*torrentStorage)
 	queue = make(map[*torrent.Torrent]int64)
+	pause = nil
 	index = 0
 
 	clientConfig.DefaultStorage = &torrentOpener{}
@@ -282,6 +283,9 @@ func AddMagnet(path string, magnet string) int {
 //
 //export AddTorrentFromURL
 func AddTorrentFromURL(path string, url string) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	var t *torrent.Torrent
 	var mi *metainfo.MetaInfo
 
@@ -296,9 +300,6 @@ func AddTorrentFromURL(path string, url string) int {
 	if err != nil {
 		return -1
 	}
-
-	mu.Lock()
-	defer mu.Unlock()
 
 	if _, ok := filestorage[mi.Info.Hash()]; ok {
 		err = errors.New("Already exists")
@@ -327,6 +328,9 @@ func AddTorrentFromURL(path string, url string) int {
 //
 //export AddTorrent
 func AddTorrent(file string) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	var t *torrent.Torrent
 	var mi *metainfo.MetaInfo
 
@@ -334,9 +338,6 @@ func AddTorrent(file string) int {
 	if err != nil {
 		return -1
 	}
-
-	mu.Lock()
-	defer mu.Unlock()
 
 	if _, ok := filestorage[mi.Info.Hash()]; ok {
 		err = errors.New("Already exists")
@@ -361,6 +362,9 @@ func AddTorrent(file string) int {
 
 //export AddTorrentFromBytes
 func AddTorrentFromBytes(path string, buf []byte) int {
+	mu.Lock()
+	defer mu.Unlock()
+
 	var t *torrent.Torrent
 	var mi *metainfo.MetaInfo
 
@@ -370,9 +374,6 @@ func AddTorrentFromBytes(path string, buf []byte) int {
 	if err != nil {
 		return -1
 	}
-
-	mu.Lock()
-	defer mu.Unlock()
 
 	if _, ok := filestorage[mi.Info.Hash()]; ok {
 		err = errors.New("Already exists")
@@ -427,6 +428,11 @@ func StartTorrent(i int) bool {
 	defer mu.Unlock()
 
 	t := torrents[i]
+
+	if pause != nil {
+		pause[t] = StatusDownloading
+		return true
+	}
 
 	if client.ActiveTorrent(t) {
 		return true
@@ -532,6 +538,12 @@ func StopTorrent(i int) {
 	defer mu.Unlock()
 
 	t := torrents[i]
+
+	if pause != nil {
+		delete(pause, t)
+		return
+	}
+
 	stopTorrent(t)
 	queueNext(nil)
 }
@@ -581,6 +593,52 @@ func RemoveTorrent(i int) {
 	unregister(i)
 }
 
+func Pause() {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if pause == nil {
+		pause = make(map[*torrent.Torrent]int32)
+	}
+
+	for _, t := range torrents {
+		s := torrentStatus(t)
+		switch s {
+		case StatusPaused:
+			// ignore
+		case StatusChecking:
+			// ignore
+		default:
+			stopTorrent(t)
+			pause[t] = s
+		}
+	}
+}
+
+func Resume() {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if pause == nil {
+		return
+	}
+
+	now := time.Now().UnixNano()
+
+	for t, s := range pause {
+		switch s {
+		case StatusQueued:
+			queue[t] = now
+		default:
+			if !startTorrent(t) {
+				// no way to report error, just put it in queue
+				queue[t] = now
+			}
+		}
+	}
+	pause = nil
+}
+
 //export Error
 func Error() string {
 	mu.Lock()
@@ -614,6 +672,7 @@ var err error
 var torrents map[int]*torrent.Torrent
 var index int
 var mu sync.Mutex
+var pause map[*torrent.Torrent]int32
 
 func register(t *torrent.Torrent) int {
 	index++
