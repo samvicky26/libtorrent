@@ -610,8 +610,6 @@ func Pause() {
 	}
 
 	mappingStop.Set()
-
-	client.StopDHT()
 }
 
 func Resume() {
@@ -621,8 +619,6 @@ func Resume() {
 	if pause == nil {
 		return
 	}
-
-	client.StartDHT()
 
 	go func() {
 		mappingStart()
