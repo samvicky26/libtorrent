@@ -71,7 +71,7 @@ func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, e
 		ext = port
 	}
 
-	lease := 5 * time.Duration(RefreshPort) * time.Nanosecond
+	lease := 2 * time.Duration(RefreshPort) * time.Nanosecond
 
 	// try specific port
 	p, err := d.AddPortMapping(proto, port, ext, n, lease)
@@ -181,21 +181,29 @@ func mapping(timeout time.Duration) error {
 	// udp have priority we are using uTP
 	if udpPort == "" {
 		tcpPort = ""
-		client.SetListenAddr(clientAddr)
+		updateClientAddr(clientAddr)
 		return nil
 	}
 
 	if tcpPort != udpPort {
 		// if we got different TCP port, reset it
 		tcpPort = ""
-		client.SetListenAddr(udpPort)
+		updateClientAddr(udpPort)
 		return nil
 	}
 
 	if tcpPort == udpPort {
-		client.SetListenAddr(udpPort)
+		updateClientAddr(udpPort)
 		return nil
 	}
 
 	return nil
+}
+
+func updateClientAddr(addr string) {
+	old := client.ListenAddr().String()
+	if old == addr {
+		return
+	}
+	client.SetListenAddr(addr)
 }
