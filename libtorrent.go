@@ -169,15 +169,7 @@ func Create() bool {
 	}
 
 	go func() {
-		for {
-			select {
-			case <-client.Wait():
-				return
-			case <-time.After(time.Duration(RefreshPort) * time.Nanosecond):
-			}
-			// in go routine do 5 seconds discovery
-			mapping(5 * time.Second)
-		}
+		mappingStart()
 	}()
 
 	return true
@@ -602,6 +594,9 @@ func Pause() {
 	}
 
 	for _, t := range torrents {
+		if _, ok := pause[t]; ok {
+			continue
+		}
 		s := torrentStatus(t)
 		switch s {
 		case StatusPaused:
@@ -613,6 +608,10 @@ func Pause() {
 			pause[t] = s
 		}
 	}
+
+	mappingStop.Set()
+
+	client.StopDHT()
 }
 
 func Resume() {
@@ -623,20 +622,47 @@ func Resume() {
 		return
 	}
 
+	client.StartDHT()
+
+	go func() {
+		mappingStart()
+	}()
+
 	now := time.Now().UnixNano()
 
+	// at first resume active
 	for t, s := range pause {
 		switch s {
 		case StatusQueued:
-			queue[t] = now
 		default:
-			if !startTorrent(t) {
-				// no way to report error, just put it in queue
+			if !queueStart(t) { // problem starting? unable to report error. queue it manually.
 				queue[t] = now
 			}
 		}
 	}
+	// second run resume queued
+	for t, s := range pause {
+		switch s {
+		case StatusQueued:
+			// user can remove active torrents from queue while paused.
+			// so we may still have slots available after 'resume active' step. start until we full.
+			if client.ActiveCount() < ActiveCount {
+				if !startTorrent(t) { // problem starting? unable to report error. queue it manually.
+					queue[t] = now
+				}
+			} else {
+				queue[t] = now
+			}
+		default:
+		}
+	}
 	pause = nil
+}
+
+func Paused() bool {
+	mu.Lock()
+	defer mu.Unlock()
+	return pause != nil
 }
 
 //export Error
@@ -696,6 +722,8 @@ func unregister(i int) {
 	torrentstorageLock.Unlock()
 
 	delete(queue, t)
+
+	delete(pause, t)
 
 	delete(torrents, i)
 }
