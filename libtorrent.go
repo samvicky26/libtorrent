@@ -7,8 +7,11 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -36,12 +39,76 @@ func SetDefaultAnnouncesList(str string) {
 	}
 }
 
-//export CreateTorrentFile
-func CreateTorrentFile(path string) []byte {
+// from transmissionbt makemeta.c
+func bestPieceSize(totalSize int64) int64 {
+	var KiB int64 = 1024
+	var MiB int64 = 1048576
+	var GiB int64 = 1073741824
+
+	if totalSize >= (2 * GiB) {
+		return 2 * MiB
+	}
+	if totalSize >= (1 * GiB) {
+		return 1 * MiB
+	}
+	if totalSize >= (512 * MiB) {
+		return 512 * KiB
+	}
+	if totalSize >= (350 * MiB) {
+		return 256 * KiB
+	}
+	if totalSize >= (150 * MiB) {
+		return 128 * KiB
+	}
+	if totalSize >= (50 * MiB) {
+		return 64 * KiB
+	}
+	return 32 * KiB // less than 50 meg
+}
+
+func walkSize(root string) (size int64) {
+	err = filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if fi.IsDir() {
+			// Directories are implicit in torrent files.
+			return nil
+		} else if path == root {
+			// The root is a file.
+			size += fi.Size()
+			return nil
+		}
+		relPath, err := filepath.Rel(root, path)
+		if err != nil {
+			return fmt.Errorf("error getting relative path: %s, %s", relPath, err)
+		}
+		return nil
+	})
+	if err != nil {
+		size = 0
+		return
+	}
+	return
+}
+
+func metainfoCreate(p string) *metainfo.MetaInfo {
 	mi := &metainfo.MetaInfo{
 		AnnounceList: builtinAnnounceList,
 	}
-	mi.SetDefaults()
+
+	s := walkSize(p)
+
+	mi.Comment = ""
+	mi.CreatedBy = "libtorrent"
+	mi.CreationDate = time.Now().Unix()
+	mi.Info.PieceLength = bestPieceSize(s)
+	return mi
+}
+
+//export CreateTorrentFile
+func CreateTorrentFile(path string) []byte {
+	mi := metainfoCreate(path)
 	err = mi.Info.BuildFromFilePath(path)
 	if err != nil {
 		return nil
@@ -144,14 +211,7 @@ func CreateTorrent(p string) int {
 
 	var t *torrent.Torrent
 
-	mi := &metainfo.MetaInfo{
-		AnnounceList: builtinAnnounceList,
-	}
-
-	mi.Comment = ""
-	mi.CreatedBy = "libtorrent"
-	mi.CreationDate = time.Now().Unix()
-	mi.Info.PieceLength = 256 * 1024
+	mi := metainfoCreate(p)
 
 	err = mi.Info.BuildFromFilePath(p)
 	if err != nil {
@@ -260,10 +320,10 @@ func AddTorrentFromURL(path string, url string) int {
 
 // AddTorrent
 //
-// Add torrent from local file or remote url.
+// Add torrent from local file and seed.
 //
-//export AddTorrentFromFile
-func AddTorrentFromFile(path string, file string) int {
+//export AddTorrent
+func AddTorrent(file string) int {
 	var t *torrent.Torrent
 	var mi *metainfo.MetaInfo
 
@@ -280,7 +340,7 @@ func AddTorrentFromFile(path string, file string) int {
 		return -1
 	}
 
-	fs := registerFileStorage(mi.Info.Hash(), path)
+	fs := registerFileStorage(mi.Info.Hash(), path.Dir(file))
 
 	fs.Comment = mi.Comment
 	fs.Creator = mi.CreatedBy
