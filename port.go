@@ -175,25 +175,28 @@ func mappingPort(timeout time.Duration) error {
 		}
 	}
 
+	// start tcp priority
 	mu.Lock()
-	if tcpPort != "" { // tcp assigned, so UPnP/NAP-PMP working
-		// did we miss udp port or tcp is different? which menas we unable to get tcp port number same as udp port.
-		// we need to reset udp port and try assign udp port number same as tcp port.
-		if udpPort == "" || tcpPort != udpPort { // start tcp priority
-			udpPort = ""
-			mu.Unlock()
-			udp = u
-			for _, d := range dd {
-				if udp != nil {
-					if err := udp(d); err == nil {
-						udp = nil
+	if udpPort != tcpPort { // ooops...
+		if tcpPort != "" { // tcp assigned, so UPnP/NAP-PMP working.
+			// did we miss udp port or tcp is different? which menas we unable to get tcp port number same as udp port.
+			// we need to reset udp port and try assign udp port number same as tcp port.
+			if udpPort != "" { // udp assgined so UPnP/NAP-PMP udp working.
+				udpPort = ""
+				mu.Unlock()
+				udp = u
+				for _, d := range dd {
+					if udp != nil {
+						if err := udp(d); err == nil {
+							udp = nil
+						}
 					}
 				}
-			}
-			mu.Lock()
-			if udpPort == "" { // unable to assign udp port reset booth
-				udpPort = ""
-				tcpPort = ""
+				mu.Lock()
+				if udpPort == "" { // unable to assign udp port reset booth
+					udpPort = ""
+					tcpPort = ""
+				}
 			}
 		}
 	}
