@@ -37,7 +37,6 @@ func TorrentHash(i int) string {
 func TorrentName(i int) string {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	return t.Name()
 }
@@ -63,26 +62,13 @@ func TorrentStatus(i int) int32 {
 	mu.Lock()
 	defer mu.Unlock()
 	t := torrents[i]
-
-	if pause != nil {
-		if _, ok := pause[t]; ok {
-			return StatusQueued
-		}
-		return StatusPaused
-	}
-
 	return torrentStatus(t)
 }
 
 func torrentStatus(t *torrent.Torrent) int32 {
 	if client.ActiveTorrent(t) {
-		if t.Info() != nil {
-			// TODO t.Seeding() not working
-			if pendingCompleted(t) {
-				if t.Seeding() {
-					return StatusSeeding
-				}
-			}
+		if pendingCompleted(t) {
+			return StatusSeeding
 		}
 		return StatusDownloading
 	} else {
@@ -91,6 +77,11 @@ func torrentStatus(t *torrent.Torrent) int32 {
 		}
 		if _, ok := queue[t]; ok {
 			return StatusQueued
+		}
+		if pause != nil {
+			if _, ok := pause[t]; ok {
+				return StatusQueued
+			}
 		}
 		return StatusPaused
 	}
