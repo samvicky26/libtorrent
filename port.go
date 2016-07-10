@@ -102,8 +102,10 @@ func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, e
 	return 0, err
 }
 
-func mapping(timeout time.Duration) error {
+func mappingPort(timeout time.Duration) error {
+	mu.Lock()
 	_, pp, err := net.SplitHostPort(clientAddr)
+	mu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -115,36 +117,15 @@ func mapping(timeout time.Duration) error {
 
 	dd := upnp.Discover(timeout, timeout)
 
-	tcp := func(d nat.Device) error {
+	u := func(d nat.Device) error {
 		ext, err := d.GetExternalIPAddress()
 		if err != nil {
 			return err
 		}
 		mu.Lock()
-		pp := tcpPort
+		pp := udpPort // reuse old port
 		if pp == "" {
-			pp = udpPort
-		}
-		mu.Unlock()
-		p, err := getPort(d, nat.TCP, localport, pp)
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		defer mu.Unlock()
-		tcpPort = net.JoinHostPort(ext.String(), strconv.Itoa(p))
-		return nil
-	}
-
-	udp := func(d nat.Device) error {
-		ext, err := d.GetExternalIPAddress()
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		pp := udpPort
-		if pp == "" {
-			pp = tcpPort
+			pp = tcpPort // reuse tcp port
 		}
 		mu.Unlock()
 		p, err := getPort(d, nat.UDP, localport, pp)
@@ -156,7 +137,31 @@ func mapping(timeout time.Duration) error {
 		udpPort = net.JoinHostPort(ext.String(), strconv.Itoa(p))
 		return nil
 	}
+	udp := u
 
+	t := func(d nat.Device) error {
+		ext, err := d.GetExternalIPAddress()
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		pp := tcpPort // reuse old port
+		if pp == "" {
+			pp = udpPort // reuse udp port
+		}
+		mu.Unlock()
+		p, err := getPort(d, nat.TCP, localport, pp)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		tcpPort = net.JoinHostPort(ext.String(), strconv.Itoa(p))
+		return nil
+	}
+	tcp := t
+
+	// start udp priority
 	for _, d := range dd {
 		if udp != nil {
 			if err := udp(d); err == nil {
@@ -171,6 +176,30 @@ func mapping(timeout time.Duration) error {
 	}
 
 	mu.Lock()
+	if tcpPort != "" { // tcp assigned, so UPnP/NAP-PMP working
+		// did we miss udp port or tcp is different? which menas we unable to get tcp port number same as udp port.
+		// we need to reset udp port and try assign udp port number same as tcp port.
+		if udpPort == "" || tcpPort != udpPort { // start tcp priority
+			udpPort = ""
+			mu.Unlock()
+			udp = u
+			for _, d := range dd {
+				if udp != nil {
+					if err := udp(d); err == nil {
+						udp = nil
+					}
+				}
+			}
+			mu.Lock()
+			if udpPort == "" { // unable to assign udp port reset booth
+				udpPort = ""
+				tcpPort = ""
+			}
+		}
+	}
+	mu.Unlock()
+
+	mu.Lock()
 	defer mu.Unlock()
 
 	if tcp != nil {
@@ -182,7 +211,7 @@ func mapping(timeout time.Duration) error {
 	}
 
 	// udp have priority we are using uTP
-	if udpPort == "" {
+	if udpPort == "" { // udp == tcp == ""
 		tcpPort = ""
 		updateClientAddr(clientAddr)
 		return nil
@@ -195,12 +224,12 @@ func mapping(timeout time.Duration) error {
 		return nil
 	}
 
-	if tcpPort == udpPort {
+	if tcpPort == udpPort { // finnely!
 		updateClientAddr(udpPort)
 		return nil
 	}
 
-	return nil
+	return nil // never here
 }
 
 func updateClientAddr(addr string) {
@@ -225,6 +254,6 @@ func mappingStart() {
 		case <-time.After(time.Duration(RefreshPort) * time.Nanosecond):
 		}
 		// in go routine do 5 seconds discovery
-		mapping(5 * time.Second)
+		mappingPort(5 * time.Second)
 	}
 }
