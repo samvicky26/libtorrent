@@ -604,6 +604,7 @@ func Pause() {
 		case StatusChecking:
 			// ignore
 		default:
+			delete(queue, t)
 			stopTorrent(t)
 			pause[t] = s
 		}
