@@ -103,6 +103,11 @@ func PortCheck() bool {
 		if err != nil {
 			return false
 		}
+	} else {
+		_, port, err = net.SplitHostPort(port)
+		if err != nil {
+			return false
+		}
 	}
 	url := "http://portcheck.transmissionbt.com/" + port
 
