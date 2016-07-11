@@ -126,8 +126,13 @@ func fileUpdateCheck(t *torrent.Torrent) {
 		}
 	}
 
+	t.CancelPieces(0, t.NumPieces())
+
 	fb := filePendingBitmap(t.Info())
-	t.PiecePending(fb)
+	fb.IterTyped(func(piece int) (more bool) {
+		t.DownloadPieces(piece, piece+1)
+		return true
+	})
 
 	now := time.Now().UnixNano()
 
