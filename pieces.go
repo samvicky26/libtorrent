@@ -12,7 +12,6 @@ const (
 func TorrentPieceLength(i int) int64 {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	return t.Info().PieceLength
 }
@@ -20,7 +19,6 @@ func TorrentPieceLength(i int) int64 {
 func TorrentPiecesCount(i int) int {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
 	return t.NumPieces()
 }
