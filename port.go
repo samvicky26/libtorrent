@@ -2,6 +2,7 @@ package libtorrent
 
 import (
 	"bytes"
+	"errors"
 	"math/rand"
 	"net"
 	"net/http"
@@ -23,13 +24,71 @@ var (
 	RefreshPort = (1 * time.Minute).Nanoseconds()
 )
 
-type PortInfo struct {
-	TCP string
-	UDP string
+type InfoClient struct {
+	ClientAddr string
+	External   string
 }
 
-func PortMapping() *PortInfo {
-	return &PortInfo{tcpPort, udpPort}
+func localIP() (string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue // interface down
+		}
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue // loopback interface
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return "", err
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			ip = ip.To4()
+			if ip == nil {
+				continue // not an ipv4 address
+			}
+			return ip.String(), nil
+		}
+	}
+	return "", errors.New("are you connected to the network?")
+}
+
+func ClientInfo() *InfoClient {
+	mu.Lock()
+	defer mu.Unlock()
+
+	a := ""
+
+	host, port, err := net.SplitHostPort(clientAddr)
+	if err != nil {
+		a = clientAddr
+	} else {
+		if host == "" || host == "::" {
+			localip, err := localIP()
+			if err != nil {
+				a = net.JoinHostPort(host, port)
+			} else {
+				a = net.JoinHostPort(localip, port)
+			}
+		} else {
+			a = net.JoinHostPort(host, port)
+		}
+	}
+
+	return &InfoClient{a, udpPort}
 }
 
 func PortCheck() bool {
