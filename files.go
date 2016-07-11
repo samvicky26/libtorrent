@@ -126,8 +126,8 @@ func fileUpdateCheck(t *torrent.Torrent) {
 		}
 	}
 
+	// do not clear 'completedPieces', and do not pend completed onces. we need to update pieces one by one.
 	t.CancelPieces(0, t.NumPieces())
-
 	fb := filePendingBitmap(t.Info())
 	fb.IterTyped(func(piece int) (more bool) {
 		t.DownloadPieces(piece, piece+1)
