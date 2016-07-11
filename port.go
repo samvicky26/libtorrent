@@ -2,7 +2,6 @@ package libtorrent
 
 import (
 	"bytes"
-	"errors"
 	"math/rand"
 	"net"
 	"net/http"
@@ -17,8 +16,9 @@ import (
 
 var tcpPort string
 var udpPort string
+var mappingAddr string // clientAddr when mapping called
 
-var mappingStop missinggo.Event
+var mappingClose missinggo.Event
 
 var (
 	RefreshPort = (1 * time.Minute).Nanoseconds()
@@ -29,10 +29,10 @@ type InfoClient struct {
 	External   string
 }
 
-func localIP() (string, error) {
+func localIP() string {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return "", err
+		return ""
 	}
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 {
@@ -43,7 +43,7 @@ func localIP() (string, error) {
 		}
 		addrs, err := iface.Addrs()
 		if err != nil {
-			return "", err
+			return ""
 		}
 		for _, addr := range addrs {
 			var ip net.IP
@@ -60,10 +60,10 @@ func localIP() (string, error) {
 			if ip == nil {
 				continue // not an ipv4 address
 			}
-			return ip.String(), nil
+			return ip.String()
 		}
 	}
-	return "", errors.New("are you connected to the network?")
+	return ""
 }
 
 func ClientInfo() *InfoClient {
@@ -77,8 +77,8 @@ func ClientInfo() *InfoClient {
 		a = clientAddr
 	} else {
 		if host == "" || host == "::" {
-			localip, err := localIP()
-			if err != nil {
+			localip := localIP()
+			if localip == "" {
 				a = net.JoinHostPort(host, port)
 			} else {
 				a = net.JoinHostPort(localip, port)
@@ -168,6 +168,14 @@ func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, e
 
 func mappingPort(timeout time.Duration) error {
 	mu.Lock()
+
+	local := localIP()
+	if mappingAddr != local {
+		mappingAddr = local
+		tcpPort = ""
+		udpPort = ""
+	}
+
 	_, pp, err := net.SplitHostPort(clientAddr)
 	mu.Unlock()
 	if err != nil {
@@ -309,21 +317,40 @@ func updateClientAddr(addr string) {
 
 func mappingStart() {
 	mu.Lock()
-	mappingStop.Set()
-	mappingStop.Clear()
+	mappingClose.Set()
+	mappingClose.Clear()
 	mu.Unlock()
+
+	refresh := RefreshPort
+
+	if udpPort == "" { // start from 1 second if previous mapping failed
+		refresh = (1 * time.Second).Nanoseconds()
+	}
+
 	for {
 		select {
-		case <-mappingStop.LockedChan(&mu):
-			tcpPort = ""
-			udpPort = ""
-			updateClientAddr(clientAddr)
+		case <-mappingClose.LockedChan(&mu):
 			return
 		case <-client.Wait():
 			return
-		case <-time.After(time.Duration(RefreshPort) * time.Nanosecond):
+		case <-time.After(time.Duration(refresh) * time.Nanosecond):
 		}
-		// in go routine do 5 seconds discovery
-		mappingPort(5 * time.Second)
+		// in go routine do 1 seconds discovery
+		mappingPort(1 * time.Second)
+		if udpPort != "" { // on success, normal refresh rate
+			refresh = RefreshPort
+		} else {
+			refresh = refresh * 2
+		}
+		if refresh > RefreshPort {
+			refresh = RefreshPort
+		}
 	}
+}
+
+func mappingStop() {
+	mappingClose.Set()
+	tcpPort = ""
+	udpPort = ""
+	updateClientAddr(clientAddr)
 }

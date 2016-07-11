@@ -31,20 +31,24 @@ func Pause() {
 		}
 	}
 
-	mappingStop.Set()
+	mappingStop()
 }
 
 func Resume() {
 	mu.Lock()
 	defer mu.Unlock()
 
+	// every time application call resume() means network configuration changed.
+	// we need update port info stats and port mapping.
+	go func() {
+		mappingPort(1 * time.Second)
+
+		mappingStart()
+	}()
+
 	if pause == nil {
 		return
 	}
-
-	go func() {
-		mappingStart()
-	}()
 
 	now := time.Now().UnixNano()
 
