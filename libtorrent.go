@@ -571,6 +571,7 @@ func CheckTorrent(i int) {
 	ts := torrentstorage[t.InfoHash()]
 	ts.completedPieces.Clear()
 	torrentstorageLock.Unlock()
+	fileUpdateCheck(t)
 	client.CheckTorrent(t)
 }
 
