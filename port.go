@@ -2,6 +2,7 @@ package libtorrent
 
 import (
 	"bytes"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -321,16 +322,31 @@ func mappingStart() {
 	mappingClose.Clear()
 	mu.Unlock()
 
+	refresh := RefreshPort
+
+	if udpPort == "" { // start from 1 second if previous mapping failed
+		refresh = (1 * time.Second).Nanoseconds()
+	}
+
 	for {
+		log.Println(refresh)
 		select {
 		case <-mappingClose.LockedChan(&mu):
 			return
 		case <-client.Wait():
 			return
-		case <-time.After(time.Duration(RefreshPort) * time.Nanosecond):
+		case <-time.After(time.Duration(refresh) * time.Nanosecond):
 		}
 		// in go routine do 1 seconds discovery
 		mappingPort(1 * time.Second)
+		if udpPort != "" { // on success, normal refresh rate
+			refresh = RefreshPort
+		} else {
+			refresh = refresh * 2
+		}
+		if refresh > RefreshPort {
+			refresh = RefreshPort
+		}
 	}
 }
 
