@@ -571,7 +571,15 @@ func CheckTorrent(i int) {
 	ts := torrentstorage[t.InfoHash()]
 	ts.completedPieces.Clear()
 	torrentstorageLock.Unlock()
-	fileUpdateCheck(t)
+
+	t.ClearPieces()
+
+	fb := filePendingBitmap(t.Info())
+	fb.IterTyped(func(piece int) (more bool) {
+		t.DownloadPieces(piece, piece+1)
+		return true
+	})
+
 	client.CheckTorrent(t)
 }
 
