@@ -566,8 +566,20 @@ func stopTorrent(t *torrent.Torrent) {
 func CheckTorrent(i int) {
 	mu.Lock()
 	defer mu.Unlock()
-
 	t := torrents[i]
+	torrentstorageLock.Lock()
+	ts := torrentstorage[t.InfoHash()]
+	ts.completedPieces.Clear()
+	torrentstorageLock.Unlock()
+
+	t.ClearPieces()
+
+	fb := filePendingBitmap(t.Info())
+	fb.IterTyped(func(piece int) (more bool) {
+		t.DownloadPieces(piece, piece+1)
+		return true
+	})
+
 	client.CheckTorrent(t)
 }
 

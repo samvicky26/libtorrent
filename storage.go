@@ -64,6 +64,7 @@ type torrentStorage struct {
 	path            string
 	checks          []bool
 	completedPieces bitmap.Bitmap
+
 	// fired when torrent downloaded, used for queue engine to roll downloads
 	completed bool
 	next      missinggo.Event
@@ -127,7 +128,7 @@ func (m *torrentOpener) OpenTorrent(info *metainfo.InfoEx) (storage.Torrent, err
 	// update comleted after torrent open
 	ts.Completed()
 
-	return fileTorrentStorage{ts}, nil
+	return &fileTorrentStorage{ts}, nil
 }
 
 type fileStorageTorrent struct {
@@ -135,7 +136,7 @@ type fileStorageTorrent struct {
 	ts   *torrentStorage
 }
 
-func (m fileTorrentStorage) Piece(p metainfo.Piece) storage.Piece {
+func (m *fileTorrentStorage) Piece(p metainfo.Piece) storage.Piece {
 	// Create a view onto the file-based torrent storage.
 	_io := &fileStorageTorrent{
 		p.Info,
@@ -150,7 +151,7 @@ func (m fileTorrentStorage) Piece(p metainfo.Piece) storage.Piece {
 	}
 }
 
-func (fs fileTorrentStorage) Close() error {
+func (fs *fileTorrentStorage) Close() error {
 	return nil
 }
 
