@@ -2,6 +2,7 @@ package libtorrent
 
 import (
 	"bytes"
+	"github.com/jackpal/gateway"
 	"math/rand"
 	"net"
 	"net/http"
@@ -30,6 +31,11 @@ type InfoClient struct {
 }
 
 func localIP() string {
+	gip, err := gateway.DiscoverGateway()
+	if err != nil {
+		gip = nil
+	}
+
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return ""
@@ -60,7 +66,11 @@ func localIP() string {
 			if ip == nil {
 				continue // not an ipv4 address
 			}
-			return ip.String()
+			if gip != nil && ip.Mask(ip.DefaultMask()).Equal(gip.Mask(gip.DefaultMask())) {
+				return ip.String()
+			} else {
+				return ip.String()
+			}
 		}
 	}
 	return ""
