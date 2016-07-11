@@ -2,7 +2,6 @@ package libtorrent
 
 import (
 	"bytes"
-	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -329,7 +328,6 @@ func mappingStart() {
 	}
 
 	for {
-		log.Println(refresh)
 		select {
 		case <-mappingClose.LockedChan(&mu):
 			return
