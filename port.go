@@ -315,6 +315,9 @@ func mappingStart() {
 	for {
 		select {
 		case <-mappingStop.LockedChan(&mu):
+			tcpPort = ""
+			udpPort = ""
+			updateClientAddr(clientAddr)
 			return
 		case <-client.Wait():
 			return
