@@ -117,8 +117,8 @@ func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
 	}
 
 	stats := t.Stats()
-	s.Downloaded = stats.BytesRecv
-	s.Uploaded = stats.BytesSent
+	s.Downloaded = stats.BytesRead
+	s.Uploaded = stats.BytesWritten
 
 	s.DownloadingTime = fs.DownloadingTime
 	s.SeedingTime = fs.SeedingTime
