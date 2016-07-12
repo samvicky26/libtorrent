@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -71,7 +70,7 @@ func PortCount() int {
 	mu.Lock()
 	defer mu.Unlock()
 
-	clientPorts = portLocalList()
+	clientPorts = portList()
 
 	if udpPort != "" {
 		clientPorts = append(clientPorts, udpPort)
@@ -186,12 +185,6 @@ func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, e
 
 func mappingPort(timeout time.Duration) error {
 	mu.Lock()
-	ips := portList()
-	if !reflect.DeepEqual(mappingAddr, ips) {
-		mappingAddr = ips
-		tcpPort = ""
-		udpPort = ""
-	}
 	_, pp, err := net.SplitHostPort(clientAddr)
 	mu.Unlock()
 	if err != nil {
