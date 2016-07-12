@@ -39,12 +39,15 @@ func Resume() {
 	defer mu.Unlock()
 
 	// every time application call resume() means network configuration changed.
-	// we need update port info stats and port mapping.
-	go func() {
-		mappingPort(1 * time.Second)
-
-		mappingStart()
-	}()
+	// we need to check if network interfaces were updated. and restart port mapping if so.
+	ips := portList()
+	if !reflect.DeepEqual(mappingAddr, ips) {
+		mappingAddr = ips
+		go func() {
+			mappingPort(1 * time.Second)
+			mappingStart()
+		}()
+	}
 
 	if pause == nil {
 		return

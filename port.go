@@ -186,12 +186,6 @@ func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, e
 
 func mappingPort(timeout time.Duration) error {
 	mu.Lock()
-	ips := portList()
-	if !reflect.DeepEqual(mappingAddr, ips) {
-		mappingAddr = ips
-		tcpPort = ""
-		udpPort = ""
-	}
 	_, pp, err := net.SplitHostPort(clientAddr)
 	mu.Unlock()
 	if err != nil {
