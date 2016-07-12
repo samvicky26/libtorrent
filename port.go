@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +17,8 @@ import (
 
 var tcpPort string
 var udpPort string
-var mappingAddr string // clientAddr when mapping called
+var mappingAddr []string // clientAddr when mapping called
+var clientPorts []string
 
 var mappingClose missinggo.Event
 
@@ -24,15 +26,10 @@ var (
 	RefreshPort = (1 * time.Minute).Nanoseconds()
 )
 
-type InfoClient struct {
-	ClientAddr string
-	External   string
-}
-
-func localIP() string {
+func localIP(gip net.IP) (ips []string) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return ""
+		return
 	}
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 {
@@ -43,7 +40,7 @@ func localIP() string {
 		}
 		addrs, err := iface.Addrs()
 		if err != nil {
-			return ""
+			return
 		}
 		for _, addr := range addrs {
 			var ip net.IP
@@ -60,35 +57,53 @@ func localIP() string {
 			if ip == nil {
 				continue // not an ipv4 address
 			}
-			return ip.String()
+			if gip != nil && ip.Mask(ip.DefaultMask()).Equal(gip.Mask(gip.DefaultMask())) {
+				ips = append(ips, ip.String())
+			} else {
+				ips = append(ips, ip.String())
+			}
 		}
 	}
-	return ""
+	return
 }
 
-func ClientInfo() *InfoClient {
+func PortCount() int {
 	mu.Lock()
 	defer mu.Unlock()
+	clientPorts = portList()
+	return len(clientPorts)
+}
 
-	a := ""
+func portList() []string {
+	var ports []string
 
 	host, port, err := net.SplitHostPort(clientAddr)
 	if err != nil {
-		a = clientAddr
+		ports = append(ports, clientAddr)
 	} else {
 		if host == "" || host == "::" {
-			localip := localIP()
-			if localip == "" {
-				a = net.JoinHostPort(host, port)
+			ips := localIP(nil)
+			if len(ips) == 0 {
+				ports = append(ports, net.JoinHostPort(host, port))
 			} else {
-				a = net.JoinHostPort(localip, port)
+				ports = append(ports, ips...)
 			}
 		} else {
-			a = net.JoinHostPort(host, port)
+			ports = append(ports, net.JoinHostPort(host, port))
 		}
 	}
 
-	return &InfoClient{a, udpPort}
+	if udpPort != "" {
+		ports = append(ports, udpPort)
+	}
+
+	return ports
+}
+
+func Port(i int) string {
+	mu.Lock()
+	defer mu.Unlock()
+	return clientPorts[i]
 }
 
 func PortCheck() bool {
@@ -167,11 +182,10 @@ func getPort(d nat.Device, proto nat.Protocol, port int, extPort string) (int, e
 }
 
 func mappingPort(timeout time.Duration) error {
-	local := localIP()
-
 	mu.Lock()
-	if mappingAddr != local {
-		mappingAddr = local
+	ips := portList()
+	if !reflect.DeepEqual(mappingAddr, ips) {
+		mappingAddr = ips
 		tcpPort = ""
 		udpPort = ""
 	}
