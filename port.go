@@ -86,7 +86,9 @@ func portList() []string {
 			if len(ips) == 0 {
 				ports = append(ports, net.JoinHostPort(host, port))
 			} else {
-				ports = append(ports, ips...)
+				for _, v := range ips {
+					ports = append(ports, net.JoinHostPort(v, port))
+				}
 			}
 		} else {
 			ports = append(ports, net.JoinHostPort(host, port))
