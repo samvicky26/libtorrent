@@ -70,7 +70,13 @@ func localIP(gip net.IP) (ips []string) {
 func PortCount() int {
 	mu.Lock()
 	defer mu.Unlock()
-	clientPorts = portList()
+
+	clientPorts = portLocalList()
+
+	if udpPort != "" {
+		clientPorts = append(clientPorts, udpPort)
+	}
+
 	return len(clientPorts)
 }
 
@@ -94,11 +100,6 @@ func portList() []string {
 			ports = append(ports, net.JoinHostPort(host, port))
 		}
 	}
-
-	if udpPort != "" {
-		ports = append(ports, udpPort)
-	}
-
 	return ports
 }
 
