@@ -1,6 +1,7 @@
 package libtorrent
 
 import (
+	"reflect"
 	"time"
 
 	"github.com/anacrolix/torrent"
@@ -39,7 +40,7 @@ func Resume() {
 	defer mu.Unlock()
 
 	// every time application call resume() means network configuration changed.
-	// we need to check if network interfaces were updated. and restart port mapping if so.
+	// we need to check if network interfaces / local mapping port were updated. and restart port mapping if so.
 	ips := portList()
 	if !reflect.DeepEqual(mappingAddr, ips) {
 		mappingAddr = ips

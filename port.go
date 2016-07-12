@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -71,7 +70,7 @@ func PortCount() int {
 	mu.Lock()
 	defer mu.Unlock()
 
-	clientPorts = portLocalList()
+	clientPorts = portList()
 
 	if udpPort != "" {
 		clientPorts = append(clientPorts, udpPort)
