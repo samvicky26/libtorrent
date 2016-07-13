@@ -610,6 +610,10 @@ func Close() {
 	mu.Lock()
 	defer mu.Unlock()
 
+	mappingStop()
+
+	clientAddr = ""
+
 	if client != nil {
 		client.Close()
 		client = nil

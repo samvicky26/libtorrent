@@ -317,6 +317,10 @@ func mappingPort(timeout time.Duration) error {
 }
 
 func updateClientAddr(addr string) {
+	if client == nil { // already closed
+		return
+	}
+
 	old := client.ListenAddr().String()
 	if old == addr {
 		return
@@ -337,10 +341,17 @@ func mappingStart() {
 	}
 
 	for {
+		mu.Lock()
+		if client == nil { // client can be closed already
+			mu.Unlock()
+			return
+		}
+		clientClose := client.Wait()
+		mu.Unlock()
 		select {
 		case <-mappingClose.LockedChan(&mu):
 			return
-		case <-client.Wait():
+		case <-clientClose:
 			return
 		case <-time.After(time.Duration(refresh) * time.Nanosecond):
 		}
