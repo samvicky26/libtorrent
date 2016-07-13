@@ -46,7 +46,11 @@ func TorrentActive(i int) bool {
 	mu.Lock()
 	defer mu.Unlock()
 	t := torrents[i]
-	return client.ActiveTorrent(t)
+	if _, ok := active[t]; ok {
+		return true
+	} else {
+		return false
+	}
 }
 
 const (
@@ -66,7 +70,7 @@ func TorrentStatus(i int) int32 {
 }
 
 func torrentStatus(t *torrent.Torrent) int32 {
-	if client.ActiveTorrent(t) {
+	if _, ok := active[t]; ok {
 		if pendingCompleted(t) {
 			return StatusSeeding
 		}
@@ -139,7 +143,7 @@ func TorrentStats(i int) *StatsTorrent {
 	downloading := fs.DownloadingTime
 	seeding := fs.SeedingTime
 
-	if client.ActiveTorrent(t) {
+	if _, ok := active[t]; ok {
 		now := time.Now().UnixNano()
 		if t.Seeding() {
 			seeding = seeding + (now - fs.ActivateDate)

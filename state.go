@@ -106,7 +106,7 @@ func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
 		s.Trackers = t.AnnounceList()
 	}
 
-	if client.ActiveTorrent(t) {
+	if _, ok := active[t]; ok {
 		now := time.Now().UnixNano()
 		if t.Seeding() {
 			fs.SeedingTime = fs.SeedingTime + (now - fs.ActivateDate)

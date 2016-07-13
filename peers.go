@@ -18,6 +18,7 @@ const (
 	peerSourceIncoming = 'I'
 	peerSourceDHT      = 'H'
 	peerSourcePEX      = 'X'
+	peerSourceLPD      = 'L'
 )
 
 func TorrentPeersCount(i int) int {
@@ -40,6 +41,8 @@ func TorrentPeersCount(i int) int {
 			p = "DHT"
 		case peerSourcePEX:
 			p = "PEX"
+		case peerSourceLPD:
+			p = "LPD"
 		}
 		f.Peers = append(f.Peers, Peer{v.Id, v.Name, v.Addr, p, v.SupportsEncryption, v.PiecesCompleted, v.Downloaded, v.Uploaded})
 	}
