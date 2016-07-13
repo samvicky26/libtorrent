@@ -112,6 +112,7 @@ func (m *LPDServer) receiver() {
 
 		mu.Lock()
 		m.peer(addr.String())
+		m.refresh()
 		for _, h := range ihs {
 			hash := metainfo.NewHashFromHex(h)
 			if t, ok := client.Torrent(hash); ok {
@@ -122,29 +123,30 @@ func (m *LPDServer) receiver() {
 	}
 }
 
-func (m *LPDServer) peer(peer string) {
+func (m *LPDServer) refresh() {
 	now := time.Now().UnixNano()
 	var remove []int64
-
-	add := true
-
-	for t, v := range m.peers {
+	for t, _ := range m.peers {
 		// remove old peers who did not refresh for 2 * bep14_long_timeout
 		if t+(2*bep14_long_timeout).Nanoseconds() < now {
 			remove = append(remove, t)
 		}
-		if v == peer {
-			add = false
-		}
 	}
-
 	for _, t := range remove {
 		delete(m.peers, t)
 	}
+}
 
-	if add {
-		m.peers[now] = peer
+func (m *LPDServer) peer(peer string) {
+	now := time.Now().UnixNano()
+
+	for _, v := range m.peers {
+		if v == peer {
+			return
+		}
 	}
+
+	m.peers[now] = peer
 }
 
 func (m *LPDServer) contains(e *torrent.Torrent) (int, bool) {
@@ -170,6 +172,8 @@ func (m *LPDServer) announcer() {
 		case <-m.force.LockedChan(&mu):
 		case <-time.After(refresh):
 		}
+
+		m.refresh()
 
 		mu.Lock()
 		// add missing torrent to send queue
