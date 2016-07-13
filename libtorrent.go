@@ -182,7 +182,7 @@ type BytesInfo struct {
 
 func Stats() *BytesInfo {
 	stats := client.Stats()
-	return &BytesInfo{stats.Downloaded, stats.Uploaded}
+	return &BytesInfo{stats.BytesRead, stats.BytesWritten}
 }
 
 // Get Torrent Count
