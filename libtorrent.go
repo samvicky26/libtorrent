@@ -573,9 +573,8 @@ func CheckTorrent(i int) {
 	torrentstorageLock.Unlock()
 
 	fb := filePendingBitmap(t.Info())
-	t.PiecePending(fb)
 
-	client.CheckTorrent(t)
+	client.CheckTorrent(t, fb)
 }
 
 // Remote torrent for library
