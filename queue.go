@@ -23,7 +23,7 @@ func (p Int64Slice) Sort()              { sort.Sort(p) }
 func queueStart(t *torrent.Torrent) bool {
 	delete(queue, t)
 
-	if client.ActiveCount() < ActiveCount {
+	if len(active) < ActiveCount {
 		return startTorrent(t)
 	}
 
@@ -31,7 +31,7 @@ func queueStart(t *torrent.Torrent) bool {
 	q := make(map[int64]*torrent.Torrent)
 	var l []int64
 	for _, m := range torrents {
-		if client.ActiveTorrent(m) {
+		if _, ok := active[m]; ok {
 			fs := filestorage[m.InfoHash()]
 			v := fs.ActivateDate
 			q[v] = m
@@ -157,7 +157,7 @@ func queueNext(t *torrent.Torrent) bool {
 	var l []int64
 	for m, v := range queue {
 		// queue all || keep torrent resting for 30 mins
-		if client.ActiveCount() < ActiveCount || v+QueueTimeout <= now {
+		if len(active) < ActiveCount || v+QueueTimeout <= now {
 			q[v] = m
 			l = append(l, v)
 		}

@@ -117,7 +117,7 @@ func fileUpdateCheck(t *torrent.Torrent) {
 	seeding := false
 	downloading := false
 
-	if client.ActiveTorrent(t) {
+	if _, ok := active[t]; ok {
 		pp := t.GetPendingPieces()
 		if pendingBytesCompleted(t, &pp) >= pendingBytesLength(t, &pp) {
 			seeding = true

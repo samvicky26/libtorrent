@@ -24,15 +24,27 @@ func TorrentTrackersCount(i int) int {
 	defer mu.Unlock()
 
 	t := torrents[i]
-	f := filestorage[t.InfoHash()]
-	f.Trackers = nil
+	fs := filestorage[t.InfoHash()]
+	fs.Trackers = nil
 	for _, v := range t.Trackers() {
-		f.Trackers = append(f.Trackers, Tracker{v.Url, v.Err,
+		e := ""
+		if v.Err != nil {
+			e = v.Err.Error()
+		}
+		fs.Trackers = append(fs.Trackers, Tracker{v.Url,
+			e,
 			(time.Duration(v.LastAnnounce) * time.Second).Nanoseconds(),
 			(time.Duration(v.NextAnnounce) * time.Second).Nanoseconds(),
-			v.Peers, 0, 0, 0, 0})
+			v.Peers,
+			0, 0, 0, 0})
 	}
-	return len(f.Trackers)
+	fs.Trackers = append(fs.Trackers, Tracker{"LPD",
+		"",
+		0,
+		0,
+		len(lpd.peers), // TODO show per torrent info
+		0, 0, 0, 0})
+	return len(fs.Trackers)
 }
 
 func TorrentTrackers(i int, p int) *Tracker {

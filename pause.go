@@ -44,6 +44,9 @@ func Resume() {
 	ips := portList()
 	if !reflect.DeepEqual(mappingAddr, ips) {
 		mappingAddr = ips
+
+		lpdForce()
+
 		go func() {
 			mappingPort(1 * time.Second)
 			mappingStart()
@@ -72,7 +75,7 @@ func Resume() {
 		case StatusQueued:
 			// user can remove active torrents from queue while paused.
 			// so we may still have slots available after 'resume active' step. start until we full.
-			if client.ActiveCount() < ActiveCount {
+			if len(active) < ActiveCount {
 				if !startTorrent(t) { // problem starting? unable to report error. queue it manually.
 					queue[t] = now
 				}

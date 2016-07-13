@@ -142,6 +142,7 @@ func Create() bool {
 	filestorage = make(map[metainfo.Hash]*fileStorage)
 	torrentstorage = make(map[metainfo.Hash]*torrentStorage)
 	queue = make(map[*torrent.Torrent]int64)
+	active = make(map[*torrent.Torrent]int64)
 	pause = nil
 	index = 0
 	tcpPort = ""
@@ -160,6 +161,8 @@ func Create() bool {
 	client.SetHalfOpenLimit(SocketsPerTorrent)
 
 	clientAddr = client.ListenAddr().String()
+
+	lpdStart()
 
 	// when create client do 1 second discovery
 	mu.Unlock()
@@ -429,11 +432,11 @@ func StartTorrent(i int) bool {
 		return true
 	}
 
-	if client.ActiveTorrent(t) {
+	if _, ok := active[t]; ok {
 		return true
 	}
 
-	if client.ActiveCount() >= ActiveCount {
+	if len(active) >= ActiveCount {
 		// priority to start, seeding torrent will not start over downloading torrents
 		return queueStart(t)
 	}
@@ -448,6 +451,12 @@ func startTorrent(t *torrent.Torrent) bool {
 	if err != nil {
 		return false
 	}
+
+	active[t] = time.Now().UnixNano()
+
+	lpdPeers(t)
+
+	lpdForce()
 
 	fs.ActivateDate = time.Now().UnixNano()
 
@@ -485,7 +494,7 @@ func DownloadMetadata(i int) bool {
 	t := torrents[i]
 	fs := filestorage[t.InfoHash()]
 
-	if client.ActiveTorrent(t) {
+	if _, ok := active[t]; ok {
 		return true
 	}
 
@@ -544,9 +553,11 @@ func StopTorrent(i int) {
 }
 
 func stopTorrent(t *torrent.Torrent) {
+	delete(active, t)
+
 	fs := filestorage[t.InfoHash()]
 
-	if client.ActiveTorrent(t) {
+	if _, ok := active[t]; ok {
 		t.Drop()
 		now := time.Now().UnixNano()
 		if t.Seeding() {
@@ -588,7 +599,7 @@ func RemoveTorrent(i int) {
 	defer mu.Unlock()
 
 	t := torrents[i]
-	if client.ActiveTorrent(t) {
+	if _, ok := active[t]; ok {
 		t.Drop()
 	}
 	unregister(i)
@@ -612,6 +623,8 @@ func Close() {
 
 	mappingStop()
 
+	lpdStop()
+
 	clientAddr = ""
 
 	if client != nil {
@@ -629,6 +642,7 @@ var client *torrent.Client
 var clientAddr string
 var err error
 var torrents map[int]*torrent.Torrent
+var active map[*torrent.Torrent]int64
 var index int
 var mu sync.Mutex
 var pause map[*torrent.Torrent]int32
