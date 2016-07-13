@@ -42,7 +42,7 @@ func TorrentTrackersCount(i int) int {
 		"",
 		0,
 		0,
-		len(lpd.peers), // TODO show per torrent info
+		lpdCount(t.InfoHash()),
 		0, 0, 0, 0})
 	return len(fs.Trackers)
 }

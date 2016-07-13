@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/anacrolix/missinggo"
@@ -22,13 +23,14 @@ var lpd *LPDServer
 // TODO http://bittorrent.org/beps/bep_0026.html
 
 const (
-	host           = "239.192.152.143:6771"
+	bep14_host     = "239.192.152.143:6771"
 	bep14_announce = "BT-SEARCH * HTTP/1.1\r\n" +
 		"Host: %s\r\n" +
 		"Port: %s\r\n" +
 		"Infohash: %s\r\n\r\n"
 	bep14_long_timeout  = 5 * time.Minute
 	bep14_short_timeout = 1 * time.Minute
+	bep14_max           = 1 // maximum hashes per request, 0 unlimited
 )
 
 type LPDServer struct {
@@ -48,7 +50,7 @@ func lpdStart() {
 
 	lpd.peers = make(map[int64]string)
 
-	lpd.addr, err = net.ResolveUDPAddr("udp4", host)
+	lpd.addr, err = net.ResolveUDPAddr("udp4", bep14_host)
 	if err != nil {
 		log.Println("LPT unable to start", err)
 		return
@@ -68,8 +70,16 @@ func lpdStart() {
 
 func (m *LPDServer) receiver() {
 	for {
-		buf := make([]byte, 1500)
-		_, from, err := lpd.conn.ReadFromUDP(buf)
+		mu.Lock()
+		if lpd == nil {
+			mu.Unlock()
+			return
+		}
+		conn := lpd.conn
+		mu.Unlock()
+
+		buf := make([]byte, 2000)
+		_, from, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			log.Println("Local Announce read error: ", err)
 			continue
@@ -93,9 +103,12 @@ func (m *LPDServer) receiver() {
 		}
 
 		var ihs []string
-		for i := 0; i < len(ih); i += 40 {
-			h := ih[i : i+40]
-			ihs = append(ihs, h)
+		for _, v := range strings.Split(ih, " ") {
+			v = strings.TrimSpace(v)
+			for i := 0; i < len(v); i += 40 {
+				h := v[i : i+40]
+				ihs = append(ihs, h)
+			}
 		}
 
 		port := req.Header.Get("Port")
@@ -221,9 +234,10 @@ func (m *LPDServer) announcer() {
 			log.Println("Announce error", err)
 			continue
 		}
+		count := 0
 		for m.next != nil {
 			ihs += m.next.InfoHash().HexString()
-			req := fmt.Sprintf(bep14_announce, host, port, ihs)
+			req := fmt.Sprintf(bep14_announce, bep14_host, port, strings.ToUpper(ihs))
 			buf := []byte(req)
 			if len(buf) >= 1400 {
 				break
@@ -236,6 +250,10 @@ func (m *LPDServer) announcer() {
 				} else {
 					m.next = m.queue[i]
 				}
+			}
+			count++
+			if bep14_max != 0 && count >= bep14_max {
+				break
 			}
 		}
 		mu.Unlock()
@@ -269,6 +287,10 @@ func lpdPeers(t *torrent.Torrent) {
 	for _, p := range lpd.peers {
 		lpdPeer(t, p)
 	}
+}
+
+func lpdCount(hash metainfo.Hash) int {
+	return len(lpd.peers)
 }
 
 func lpdPeer(t *torrent.Torrent, p string) {
