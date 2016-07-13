@@ -359,8 +359,6 @@ func mappingStart() {
 
 func mappingStop() {
 	mappingClose.Set()
-	tcpPort = ""
-	udpPort = ""
 	mappingAddr = nil
 	updateClientAddr(clientAddr)
 }

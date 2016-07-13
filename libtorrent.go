@@ -144,6 +144,9 @@ func Create() bool {
 	queue = make(map[*torrent.Torrent]int64)
 	pause = nil
 	index = 0
+	tcpPort = ""
+	udpPort = ""
+	mappingAddr = nil
 
 	clientConfig.DefaultStorage = &torrentOpener{}
 	clientConfig.Seed = true
@@ -182,7 +185,7 @@ type BytesInfo struct {
 
 func Stats() *BytesInfo {
 	stats := client.Stats()
-	return &BytesInfo{stats.Downloaded, stats.Uploaded}
+	return &BytesInfo{stats.BytesRead, stats.BytesWritten}
 }
 
 // Get Torrent Count
@@ -573,9 +576,8 @@ func CheckTorrent(i int) {
 	torrentstorageLock.Unlock()
 
 	fb := filePendingBitmap(t.Info())
-	t.PiecePending(fb)
 
-	client.CheckTorrent(t)
+	client.CheckTorrent(t, fb)
 }
 
 // Remote torrent for library
