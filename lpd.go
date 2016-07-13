@@ -109,11 +109,9 @@ func (m *LPDServer) receiver() {
 			log.Println(err)
 			continue
 		}
-		now := time.Now().UnixNano()
 
 		mu.Lock()
-		m.peers[now] = addr.String()
-		m.refresh()
+		m.peer(addr.String())
 		for _, h := range ihs {
 			hash := metainfo.NewHashFromHex(h)
 			if t, ok := client.Torrent(hash); ok {
@@ -124,17 +122,28 @@ func (m *LPDServer) receiver() {
 	}
 }
 
-func (m *LPDServer) refresh() {
+func (m *LPDServer) peer(peer string) {
 	now := time.Now().UnixNano()
 	var remove []int64
-	for t, _ := range m.peers {
+
+	add := true
+
+	for t, v := range m.peers {
 		// remove old peers who did not refresh for 2 * bep14_long_timeout
 		if t+(2*bep14_long_timeout).Nanoseconds() < now {
 			remove = append(remove, t)
 		}
+		if v == peer {
+			add = false
+		}
 	}
+
 	for _, t := range remove {
 		delete(m.peers, t)
+	}
+
+	if add {
+		m.peers[now] = peer
 	}
 }
 
