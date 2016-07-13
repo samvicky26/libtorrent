@@ -144,6 +144,9 @@ func Create() bool {
 	queue = make(map[*torrent.Torrent]int64)
 	pause = nil
 	index = 0
+	tcpPort = ""
+	udpPort = ""
+	mappingAddr = nil
 
 	clientConfig.DefaultStorage = &torrentOpener{}
 	clientConfig.Seed = true
