@@ -610,7 +610,7 @@ func RemoveTorrent(i int) {
 
 	stopTorrent(t)
 
-	unregister(t)
+	unregister(i)
 }
 
 //export Error
@@ -667,7 +667,9 @@ func register(t *torrent.Torrent) int {
 	return index
 }
 
-func unregister(t *torrent.Torrent) {
+func unregister(i int) {
+	t := torrents[i]
+
 	delete(filestorage, t.InfoHash())
 
 	torrentstorageLock.Lock()
