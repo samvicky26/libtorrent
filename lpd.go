@@ -33,8 +33,8 @@ const (
 		"\r\n"
 	bep14_announce_infohash = "Infohash: %s\r\n"
 	bep14_long_timeout      = 5 * time.Minute
-	bep14_short_timeout     = 1 * time.Minute
-	bep14_max               = 1 // maximum hashes per request, 0 unlimited
+	bep14_short_timeout     = 2 * time.Second // bep14 - 1 minute
+	bep14_max               = 1               // maximum hashes per request, 0 - only limited by udp packet size
 )
 
 type LPDConn struct {
@@ -122,10 +122,15 @@ func (m *LPDConn) receiver() {
 		}
 		lpd.peer(addr.String())
 		lpd.refresh()
-		//log.Println("LPD", addr.String(), ih)
+		//log.Println("LPD", m.network, addr.String(), ih)
 		hash := metainfo.NewHashFromHex(ih)
 		if t, ok := client.Torrent(hash); ok {
 			lpdPeer(t, addr.String())
+		} else {
+			// LPD is the only source for local IP's add to all active torrents
+			for t := range active {
+				lpdPeer(t, addr.String())
+			}
 		}
 		mu.Unlock()
 	}
