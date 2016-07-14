@@ -39,6 +39,10 @@ func SetDefaultAnnouncesList(str string) {
 	}
 }
 
+func SetClientVersion(str string) {
+	torrent.ExtendedHandshakeClientVersion = str
+}
+
 // from transmissionbt makemeta.c
 func bestPieceSize(totalSize int64) int64 {
 	var KiB int64 = 1024
