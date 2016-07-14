@@ -39,6 +39,10 @@ func SetDefaultAnnouncesList(str string) {
 	}
 }
 
+func SetClientVersion(str string) {
+	torrent.ExtendedHandshakeClientVersion = str
+}
+
 // from transmissionbt makemeta.c
 func bestPieceSize(totalSize int64) int64 {
 	var KiB int64 = 1024
@@ -543,17 +547,19 @@ func StopTorrent(i int) {
 
 	t := torrents[i]
 
+	stopTorrent(t)
+
 	if pause != nil {
-		delete(pause, t)
 		return
 	}
 
-	stopTorrent(t)
 	queueNext(nil)
 }
 
 func stopTorrent(t *torrent.Torrent) {
-	delete(active, t)
+	if pause != nil {
+		delete(pause, t)
+	}
 
 	fs := filestorage[t.InfoHash()]
 
@@ -569,6 +575,8 @@ func stopTorrent(t *torrent.Torrent) {
 	} else {
 		t.Stop()
 	}
+
+	delete(active, t)
 }
 
 // CheckTorrent
@@ -599,9 +607,9 @@ func RemoveTorrent(i int) {
 	defer mu.Unlock()
 
 	t := torrents[i]
-	if _, ok := active[t]; ok {
-		t.Drop()
-	}
+
+	stopTorrent(t)
+
 	unregister(i)
 }
 
@@ -667,6 +675,8 @@ func unregister(i int) {
 	torrentstorageLock.Lock()
 	delete(torrentstorage, t.InfoHash())
 	torrentstorageLock.Unlock()
+
+	delete(active, t)
 
 	delete(queue, t)
 
