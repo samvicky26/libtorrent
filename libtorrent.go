@@ -547,17 +547,19 @@ func StopTorrent(i int) {
 
 	t := torrents[i]
 
+	stopTorrent(t)
+
 	if pause != nil {
-		delete(pause, t)
 		return
 	}
 
-	stopTorrent(t)
 	queueNext(nil)
 }
 
 func stopTorrent(t *torrent.Torrent) {
-	delete(active, t)
+	if pause != nil {
+		delete(pause, t)
+	}
 
 	fs := filestorage[t.InfoHash()]
 
@@ -573,6 +575,8 @@ func stopTorrent(t *torrent.Torrent) {
 	} else {
 		t.Stop()
 	}
+
+	delete(active, t)
 }
 
 // CheckTorrent
@@ -603,10 +607,10 @@ func RemoveTorrent(i int) {
 	defer mu.Unlock()
 
 	t := torrents[i]
-	if _, ok := active[t]; ok {
-		t.Drop()
-	}
-	unregister(i)
+
+	stopTorrent(t)
+
+	unregister(t)
 }
 
 //export Error
@@ -663,14 +667,14 @@ func register(t *torrent.Torrent) int {
 	return index
 }
 
-func unregister(i int) {
-	t := torrents[i]
-
+func unregister(t *torrent.Torrent) {
 	delete(filestorage, t.InfoHash())
 
 	torrentstorageLock.Lock()
 	delete(torrentstorage, t.InfoHash())
 	torrentstorageLock.Unlock()
+
+	delete(active, t)
 
 	delete(queue, t)
 
