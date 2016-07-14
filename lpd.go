@@ -38,6 +38,9 @@ const (
 )
 
 type LPDConn struct {
+	stop  missinggo.Event
+	force missinggo.Event
+
 	network string // "udp4" or "udp6"
 	addr    *net.UDPAddr
 	conn    *net.UDPConn
@@ -69,49 +72,54 @@ func lpdConnNew(network string, host string) *LPDConn {
 func (m *LPDConn) receiver() {
 	for {
 		mu.Lock()
-		if lpd == nil {
+		conn := m.conn
+		if conn == nil {
 			mu.Unlock()
 			return
 		}
 		mu.Unlock()
 
 		buf := make([]byte, 2000)
-		_, from, err := m.conn.ReadFromUDP(buf)
+		_, from, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			log.Println("Local Announce read error: ", err)
+			log.Println("receiver", err)
 			continue
 		}
 
 		req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(buf)))
 		if err != nil {
-			log.Println("Local Announce error: ", err)
+			log.Println("receiver", err)
 			continue
 		}
 
 		if req.Method != "BT-SEARCH" {
-			log.Println("Wrong request: ", req.Method)
+			log.Println("receiver", "Wrong request: ", req.Method)
 			continue
 		}
 
 		ih := req.Header.Get("Infohash")
 		if ih == "" {
-			log.Println("No Infohash")
+			log.Println("receiver", "No Infohash")
 			continue
 		}
 
 		port := req.Header.Get("Port")
 		if port == "" {
-			log.Println("No port")
+			log.Println("receiver", "No port")
 			continue
 		}
 
-		addr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(from.IP.String(), port))
+		addr, err := net.ResolveUDPAddr(m.network, net.JoinHostPort(from.IP.String(), port))
 		if err != nil {
-			log.Println(err)
+			log.Println("receiver", err)
 			continue
 		}
 
 		mu.Lock()
+		if lpd == nil { // can be closed already
+			mu.Unlock()
+			return
+		}
 		lpd.peer(addr.String())
 		lpd.refresh()
 		//log.Println("LPD", addr.String(), ih)
@@ -130,15 +138,15 @@ func (m *LPDConn) announcer() {
 
 	for {
 		mu.Lock()
-		lpd.force.Clear()
+		m.force.Clear()
 		mu.Unlock()
 
 		//log.Println("LPD", refresh)
 
 		select {
-		case <-lpd.stop.LockedChan(&mu):
+		case <-m.stop.LockedChan(&mu):
 			return
-		case <-lpd.force.LockedChan(&mu):
+		case <-m.force.LockedChan(&mu):
 		case <-time.After(refresh):
 		}
 
@@ -184,7 +192,7 @@ func (m *LPDConn) announcer() {
 		_, port, err := net.SplitHostPort(clientAddr)
 		if err != nil {
 			mu.Unlock()
-			log.Println("Announce error", err)
+			log.Println("announcer", err)
 			continue
 		}
 		count := 0
@@ -215,7 +223,7 @@ func (m *LPDConn) announcer() {
 			//log.Println("LPD", string(old), len(old))
 			_, err = m.conn.WriteToUDP(old, m.addr)
 			if err != nil {
-				log.Println("Announce error", err)
+				log.Println("announcer", err)
 			}
 		}
 
@@ -228,6 +236,7 @@ func (m *LPDConn) announcer() {
 }
 
 func (m *LPDConn) Close() {
+	m.stop.Set()
 	if m.conn != nil {
 		m.conn.Close()
 		m.conn = nil
@@ -235,9 +244,6 @@ func (m *LPDConn) Close() {
 }
 
 type LPDServer struct {
-	stop  missinggo.Event
-	force missinggo.Event
-
 	conn4 *LPDConn
 	conn6 *LPDConn
 
@@ -256,7 +262,7 @@ func lpdStart() {
 
 	}
 
-	//lpd.conn6 = lpdConnNew("udp6", bep14_host6)
+	lpd.conn6 = lpdConnNew("udp6", bep14_host6)
 	if lpd.conn6 != nil {
 		go lpd.conn6.receiver()
 		go lpd.conn6.announcer()
@@ -301,14 +307,18 @@ func lpdContains(queue []*torrent.Torrent, e *torrent.Torrent) (int, bool) {
 }
 
 func lpdForce() {
-	lpd.force.Set()
+	if lpd.conn4 != nil {
+		lpd.conn4.force.Set()
+	}
+	if lpd.conn6 != nil {
+		lpd.conn6.force.Set()
+	}
 }
 
 func lpdStop() {
 	if lpd != nil {
 		lpd.conn4.Close()
 		lpd.conn6.Close()
-		lpd.stop.Set()
 		lpd = nil
 	}
 }
