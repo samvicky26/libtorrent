@@ -332,13 +332,11 @@ func lpdPeer(t *torrent.Torrent, p string) {
 	if err != nil {
 		return
 	}
+	ip := net.ParseIP(host)
 	peer := torrent.Peer{
-		IP:     make([]byte, 4),
+		IP:     ip,
 		Port:   pi,
 		Source: peerSourceLPD,
 	}
-	ip := net.ParseIP(host)
-	ip4 := ip.To4()
-	missinggo.CopyExact(peer.IP, ip4[:])
 	t.AddPeers([]torrent.Peer{peer})
 }
