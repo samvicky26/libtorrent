@@ -8,9 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"net/http"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -20,11 +18,6 @@ import (
 )
 
 var (
-	builtinAnnounceList = [][]string{
-		{"udp://tracker.openbittorrent.com:80"},
-		{"udp://tracker.kicks-ass.net:80/announce"},
-	}
-
 	SocketsPerTorrent = 40
 )
 
@@ -42,85 +35,14 @@ func SetClientVersion(str string) {
 	torrent.ExtendedHandshakeClientVersion = str
 }
 
-// from transmissionbt makemeta.c
-func bestPieceSize(totalSize int64) int64 {
-	var KiB int64 = 1024
-	var MiB int64 = 1048576
-	var GiB int64 = 1073741824
+//export CreateTorrentFileFromMetaInfo
+func CreateTorrentFileFromMetaInfo() []byte {
+	mu.Lock()
+	defer mu.Unlock()
 
-	if totalSize >= (2 * GiB) {
-		return 2 * MiB
-	}
-	if totalSize >= (1 * GiB) {
-		return 1 * MiB
-	}
-	if totalSize >= (512 * MiB) {
-		return 512 * KiB
-	}
-	if totalSize >= (350 * MiB) {
-		return 256 * KiB
-	}
-	if totalSize >= (150 * MiB) {
-		return 128 * KiB
-	}
-	if totalSize >= (50 * MiB) {
-		return 64 * KiB
-	}
-	return 32 * KiB // less than 50 meg
-}
-
-func walkSize(root string) (size int64) {
-	err = filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if fi.IsDir() {
-			// Directories are implicit in torrent files.
-			return nil
-		}
-		size += fi.Size()
-		return nil
-	})
-	if err != nil {
-		size = -1
-		return
-	}
-	return
-}
-
-func metainfoCreate(p string) *metainfo.MetaInfo {
-	mi := &metainfo.MetaInfo{
-		AnnounceList: builtinAnnounceList,
-	}
-
-	s := walkSize(p)
-	if s <= 0 {
-		return nil
-	}
-
-	private := false
-
-	mi.Info.Private = &private
-	mi.Comment = ""
-	mi.CreatedBy = "libtorrent"
-	mi.CreationDate = time.Now().Unix()
-	mi.Info.PieceLength = bestPieceSize(s)
-	return mi
-}
-
-//export CreateTorrentFile
-func CreateTorrentFile(path string) []byte {
-	mi := metainfoCreate(path)
-	if mi == nil {
-		return nil
-	}
-	err = mi.Info.BuildFromFilePath(path)
-	if err != nil {
-		return nil
-	}
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)
-	err = mi.Write(w)
+	err = metainfoBuild.Write(w)
 	if err != nil {
 		return nil
 	}
@@ -208,37 +130,25 @@ func ListenAddr() string {
 	return client.ListenAddr().String()
 }
 
-//export CreateTorrent
-func CreateTorrent(p string) int {
+//export CreateTorrentFromMetaInfo
+func CreateTorrentFromMetaInfo() int {
 	mu.Lock()
 	defer mu.Unlock()
 
 	var t *torrent.Torrent
 
-	mi := metainfoCreate(p)
-	if mi == nil {
-		return -1
-	}
-
-	err = mi.Info.BuildFromFilePath(p)
-	if err != nil {
-		return -1
-	}
-
-	mi.Info.UpdateBytes()
-
-	if _, ok := filestorage[mi.Info.Hash()]; ok {
+	if _, ok := filestorage[metainfoBuild.Info.Hash()]; ok {
 		err = errors.New("Already exists")
 		return -1
 	}
 
-	fs := registerFileStorage(mi.Info.Hash(), path.Dir(p))
+	fs := registerFileStorage(metainfoBuild.Info.Hash(), path.Dir(metainfoRoot))
 
-	fs.Comment = mi.Comment
-	fs.Creator = mi.CreatedBy
-	fs.CreatedOn = (time.Duration(mi.CreationDate) * time.Second).Nanoseconds()
+	fs.Comment = metainfoBuild.Comment
+	fs.Creator = metainfoBuild.CreatedBy
+	fs.CreatedOn = (time.Duration(metainfoBuild.CreationDate) * time.Second).Nanoseconds()
 
-	t, err = client.AddTorrent(mi)
+	t, err = client.AddTorrent(metainfoBuild)
 	if err != nil {
 		return -1
 	}
