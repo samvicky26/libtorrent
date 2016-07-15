@@ -7,7 +7,6 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -78,19 +77,12 @@ func walkSize(root string) (size int64) {
 		if fi.IsDir() {
 			// Directories are implicit in torrent files.
 			return nil
-		} else if path == root {
-			// The root is a file.
-			size += fi.Size()
-			return nil
 		}
-		relPath, err := filepath.Rel(root, path)
-		if err != nil {
-			return fmt.Errorf("error getting relative path: %s, %s", relPath, err)
-		}
+		size += fi.Size()
 		return nil
 	})
 	if err != nil {
-		size = 0
+		size = -1
 		return
 	}
 	return
@@ -102,6 +94,9 @@ func metainfoCreate(p string) *metainfo.MetaInfo {
 	}
 
 	s := walkSize(p)
+	if s <= 0 {
+		return nil
+	}
 
 	private := false
 
@@ -116,6 +111,9 @@ func metainfoCreate(p string) *metainfo.MetaInfo {
 //export CreateTorrentFile
 func CreateTorrentFile(path string) []byte {
 	mi := metainfoCreate(path)
+	if mi == nil {
+		return nil
+	}
 	err = mi.Info.BuildFromFilePath(path)
 	if err != nil {
 		return nil
@@ -218,6 +216,9 @@ func CreateTorrent(p string) int {
 	var t *torrent.Torrent
 
 	mi := metainfoCreate(p)
+	if mi == nil {
+		return -1
+	}
 
 	err = mi.Info.BuildFromFilePath(p)
 	if err != nil {
