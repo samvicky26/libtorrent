@@ -293,13 +293,18 @@ func (m *LPDServer) refresh() {
 func (m *LPDServer) peer(peer string) {
 	now := time.Now().UnixNano()
 
-	for _, v := range m.peers {
+	var remove []int64
+	for k, v := range m.peers {
 		if v == peer {
-			return
+			remove = append(remove, k)
 		}
 	}
 
 	m.peers[now] = peer
+
+	for _, v := range remove {
+		delete(m.peers, v)
+	}
 }
 
 func lpdContains(queue []*torrent.Torrent, e *torrent.Torrent) (int, bool) {
