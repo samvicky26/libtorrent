@@ -333,6 +333,7 @@ func lpdStop() {
 		}
 		if lpd.conn6 != nil {
 			lpd.conn6.Close()
+			lpd.conn6 = nil
 		}
 		lpd = nil
 	}
