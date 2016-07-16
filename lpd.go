@@ -327,8 +327,13 @@ func lpdForce() {
 
 func lpdStop() {
 	if lpd != nil {
-		lpd.conn4.Close()
-		lpd.conn6.Close()
+		if lpd.conn4 != nil {
+			lpd.conn4.Close()
+			lpd.conn4 = nil
+		}
+		if lpd.conn6 != nil {
+			lpd.conn6.Close()
+		}
 		lpd = nil
 	}
 }
