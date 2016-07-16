@@ -172,6 +172,9 @@ func HashMetaInfo(piece int) bool {
 }
 
 func CloseMetaInfo() {
+	mu.Lock()
+	defer mu.Unlock()
+
 	if metainfoPr != nil {
 		metainfoPr.Close()
 		metainfoPr = nil
