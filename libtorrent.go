@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	SocketsPerTorrent = 40
-	DefaultListenAddr = ":53007"
+	SocketsPerTorrent int    = 40
+	DefaultListenAddr string = ":53007"
 )
 
 func SetDefaultAnnouncesList(str string) {
