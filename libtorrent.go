@@ -19,7 +19,7 @@ import (
 
 var (
 	SocketsPerTorrent = 40
-	ListenAddr        = ":53007"
+	DefaultListenAddr = ":53007"
 )
 
 func SetDefaultAnnouncesList(str string) {
@@ -76,7 +76,7 @@ func Create() bool {
 
 	clientConfig.DefaultStorage = &torrentOpener{}
 	clientConfig.Seed = true
-	clientConfig.ListenAddr = ListenAddr
+	clientConfig.ListenAddr = DefaultListenAddr
 
 	client, err = torrent.NewClient(&clientConfig)
 	if err != nil {
