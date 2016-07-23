@@ -33,8 +33,8 @@ const (
 		"\r\n"
 	bep14_announce_infohash = "Infohash: %s\r\n"
 	bep14_long_timeout      = 5 * time.Minute
-	bep14_short_timeout     = 2 * time.Second // bep14 - 1 minute
-	bep14_max               = 1               // maximum hashes per request, 0 - only limited by udp packet size
+	bep14_short_timeout     = 2 * time.Second // bep14 - 1 minute. not practial. what if use start/stop another torrent? so make it 2 secs.
+	bep14_max               = 0               // maximum hashes per request, 0 - only limited by udp packet size
 )
 
 type LPDConn struct {
@@ -97,8 +97,9 @@ func (m *LPDConn) receiver() {
 			continue
 		}
 
-		ih := req.Header.Get("Infohash")
-		if ih == "" {
+		// bep14 says here can be multiply response headers
+		var ihs []string = req.Header[http.CanonicalHeaderKey("Infohash")]
+		if ihs == nil {
 			log.Println("receiver", "No Infohash")
 			continue
 		}
@@ -123,14 +124,20 @@ func (m *LPDConn) receiver() {
 		lpd.peer(addr.String())
 		lpd.refresh()
 		//log.Println("LPD", m.network, addr.String(), ih)
-		hash := metainfo.NewHashFromHex(ih)
-		if t, ok := client.Torrent(hash); ok {
-			lpdPeer(t, addr.String())
-		} else {
-			// LPD is the only source for local IP's add to all active torrents
-			for t := range active {
+		ignore := make(map[*torrent.Torrent]bool)
+		for _, ih := range ihs {
+			hash := metainfo.NewHashFromHex(ih)
+			if t, ok := client.Torrent(hash); ok {
 				lpdPeer(t, addr.String())
+				ignore[t] = true
 			}
+		}
+		// LPD is the only source of local IP's. So, add it to all active torrents.
+		for t := range active {
+			if _, ok := ignore[t]; ok {
+				continue
+			}
+			lpdPeer(t, addr.String())
 		}
 		mu.Unlock()
 	}
@@ -333,6 +340,7 @@ func lpdStop() {
 		}
 		if lpd.conn6 != nil {
 			lpd.conn6.Close()
+			lpd.conn6 = nil
 		}
 		lpd = nil
 	}
