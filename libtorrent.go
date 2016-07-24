@@ -41,6 +41,10 @@ func CreateTorrentFileFromMetaInfo() []byte {
 	mu.Lock()
 	defer mu.Unlock()
 
+	return createTorrentFileFromMetaInfo()
+}
+
+func createTorrentFileFromMetaInfo() []byte {
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)
 	err = metainfoBuild.Write(w)
@@ -52,6 +56,16 @@ func CreateTorrentFileFromMetaInfo() []byte {
 		return nil
 	}
 	return b.Bytes()
+}
+
+func CreateTorrentFile(root string) []byte {
+	s := CreateMetaInfo(root)
+	for i := 0; i < s; i++ {
+		HashMetaInfo(i)
+	}
+	buf := createTorrentFileFromMetaInfo()
+	CloseMetaInfo()
+	return buf
 }
 
 // Create
