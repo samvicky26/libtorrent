@@ -22,7 +22,16 @@ func createTorrentFileExample() {
 	ioutil.WriteFile("./test.torrent", t1, 0644)
 }
 
-func downloadMagnetExample() {
+func downloadMagnetWaitExample() {
+	libtorrent.Create()
+	t1 := libtorrent.AddMagnet("/tmp", "magnet:?...")
+	libtorrent.StartTorrent(t1)
+	libtorrent.WaitAll()
+	log.Println("done")
+	libtorrent.Close()
+}
+
+func downloadMagnetStatusExample() {
 	libtorrent.Create()
 	t1 := libtorrent.AddMagnet("/tmp", "magnet:?...")
 	libtorrent.StartTorrent(t1)
