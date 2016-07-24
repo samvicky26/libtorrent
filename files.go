@@ -1,6 +1,8 @@
 package libtorrent
 
 import (
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/anacrolix/missinggo/bitmap"
@@ -107,8 +109,32 @@ func TorrentFilesCheck(i int, p int, b bool) {
 // and second for local file storage.
 //
 //export TorrentFileRename
-func TorrentFileRename(i int, f int, n string) {
+func TorrentFileRename(i int, f int, n string) bool {
 	panic("not implement")
+}
+
+func TorrentRename(i int, n string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+	t := torrents[i]
+
+	torrentstorageLock.Lock()
+	defer torrentstorageLock.Unlock()
+
+	ts := torrentstorage[t.InfoHash()]
+	name := ts.root
+	if name == "" {
+		name = ts.info.Name
+	}
+	old := filepath.Join(ts.path, name)
+	if _, err := os.Stat(old); err == nil {
+		err = os.Rename(old, filepath.Join(ts.path, n))
+		if err != nil {
+			return false
+		}
+	}
+	ts.root = n
+	return true
 }
 
 func fileUpdateCheck(t *torrent.Torrent) {
