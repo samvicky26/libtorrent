@@ -198,7 +198,11 @@ func filePendingBitmapTs(info *metainfo.InfoEx, checks []bool) *bitmap.Bitmap {
 	var offset int64
 	for i, fi := range info.UpvertedFiles() {
 		s := offset / info.PieceLength
-		e := (offset+fi.Length)/info.PieceLength + 1
+		e := (offset + fi.Length) / info.PieceLength
+		r := (offset + fi.Length) % info.PieceLength
+		if r > 0 {
+			e++
+		}
 		if checks[i] {
 			bm.AddRange(int(s), int(e))
 		}
