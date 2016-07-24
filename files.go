@@ -51,9 +51,10 @@ func TorrentFilesCount(i int) int {
 		b := int(v.Offset() / info.PieceLength)
 		e := int((v.Offset() + v.Length()) / info.PieceLength)
 		r := (v.Offset() + v.Length()) % info.PieceLength
-		if r > 0 {
+		if r > 0 { // [b, e)
 			e++
 		}
+		e-- // [b, e]
 
 		// mid length
 		var mid int64
