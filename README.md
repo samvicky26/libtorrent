@@ -1,5 +1,7 @@
 # libtorrent
 
+Go torrent library with nice and simple interface. Can be used as standart Go library or gomobile library (iOS / Android)
+
 Base Features (https://github.com/anacrolix/torrent):
 
  * Protocol obfuscation
