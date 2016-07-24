@@ -65,6 +65,8 @@ type TorrentState struct {
 	MetaInfo *metainfo.MetaInfo `json:"metainfo,omitempty"`
 	Pieces   []bool             `json:"pieces,omitempty"`
 
+	Root string `json:root,omitempty`
+
 	Checks []bool `json:"checks,omitempty"`
 
 	// Stats bytes
@@ -135,6 +137,7 @@ func saveTorrentState(t *torrent.Torrent) ([]byte, error) {
 		ts := torrentstorage[t.InfoHash()]
 		s.Pieces = ts.Pieces()
 		s.Checks = ts.Checks()
+		s.Root = ts.root
 		torrentstorageLock.Unlock()
 	}
 
@@ -188,6 +191,7 @@ func loadTorrentState(path string, buf []byte) (t *torrent.Torrent, err error) {
 		ts.completedPieces.Set(i, b)
 	}
 	ts.checks = s.Checks
+	ts.root = s.Root
 	torrentstorageLock.Unlock()
 
 	if spec.Info != nil {

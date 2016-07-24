@@ -64,6 +64,7 @@ type torrentStorage struct {
 	path            string
 	checks          []bool
 	completedPieces bitmap.Bitmap
+	root            string // rename torrent for root node
 
 	// fired when torrent downloaded, used for queue engine to roll downloads
 	completed bool
@@ -71,12 +72,14 @@ type torrentStorage struct {
 }
 
 func (m *torrentStorage) Checks() []bool {
+	// lock outside
 	checks := make([]bool, len(m.checks))
 	copy(checks, m.checks)
 	return checks
 }
 
 func (m *torrentStorage) Pieces() []bool {
+	// lock outside
 	bf := make([]bool, m.info.NumPieces())
 	m.completedPieces.IterTyped(func(piece int) (again bool) {
 		bf[piece] = true
@@ -277,5 +280,11 @@ func (fst *fileStorageTorrent) WriteAt(p []byte, off int64) (n int, err error) {
 }
 
 func (fst *fileStorageTorrent) fileInfoName(fi metainfo.FileInfo) string {
-	return filepath.Join(append([]string{fst.ts.path, fst.info.Name}, fi.Path...)...)
+	torrentstorageLock.Lock()
+	defer torrentstorageLock.Unlock()
+	name := fst.ts.root
+	if name == "" {
+		name = fst.info.Name
+	}
+	return filepath.Join(append([]string{fst.ts.path, name}, fi.Path...)...)
 }

@@ -38,6 +38,17 @@ func TorrentName(i int) string {
 	mu.Lock()
 	defer mu.Unlock()
 	t := torrents[i]
+	return torrentName(t)
+}
+
+func torrentName(t *torrent.Torrent) string {
+	torrentstorageLock.Lock()
+	ts := torrentstorage[t.InfoHash()]
+	root := ts.root
+	torrentstorageLock.Unlock()
+	if root != "" {
+		return root
+	}
 	return t.Name()
 }
 
