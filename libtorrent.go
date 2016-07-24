@@ -47,7 +47,7 @@ func CreateTorrentFileFromMetaInfo() []byte {
 func createTorrentFileFromMetaInfo() []byte {
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)
-	err = metainfoBuild.Write(w)
+	err = metainfoBuild.info.Write(w)
 	if err != nil {
 		return nil
 	}
@@ -152,18 +152,20 @@ func CreateTorrentFromMetaInfo() int {
 
 	var t *torrent.Torrent
 
-	if _, ok := filestorage[metainfoBuild.Info.Hash()]; ok {
+	hash := metainfoBuild.info.Info.Hash()
+
+	if _, ok := filestorage[hash]; ok {
 		err = errors.New("Already exists")
 		return -1
 	}
 
-	fs := registerFileStorage(metainfoBuild.Info.Hash(), path.Dir(metainfoRoot))
+	fs := registerFileStorage(hash, path.Dir(metainfoBuild.root))
 
-	fs.Comment = metainfoBuild.Comment
-	fs.Creator = metainfoBuild.CreatedBy
-	fs.CreatedOn = (time.Duration(metainfoBuild.CreationDate) * time.Second).Nanoseconds()
+	fs.Comment = metainfoBuild.info.Comment
+	fs.Creator = metainfoBuild.info.CreatedBy
+	fs.CreatedOn = (time.Duration(metainfoBuild.info.CreationDate) * time.Second).Nanoseconds()
 
-	t, err = client.AddTorrent(metainfoBuild)
+	t, err = client.AddTorrent(metainfoBuild.info)
 	if err != nil {
 		return -1
 	}
