@@ -36,7 +36,7 @@ Additional features:
   * UPnP / PMP
   * Rename Torrent
   * BEPs
-    - 14: Local Peer Discovery
+    - 14: Local Peers Discovery
   * Queue Engine
   * Full Contorl over torrent state (download, stop, pause, resume)
 
