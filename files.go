@@ -118,6 +118,18 @@ func TorrentFileRename(i int, f int, n string) bool {
 	panic("not implement")
 }
 
+func TorrentSetName(i int, n string) {
+	mu.Lock()
+	defer mu.Unlock()
+	t := torrents[i]
+
+	torrentstorageLock.Lock()
+	defer torrentstorageLock.Unlock()
+
+	ts := torrentstorage[t.InfoHash()]
+	ts.root = n
+}
+
 func TorrentRename(i int, n string) bool {
 	mu.Lock()
 	defer mu.Unlock()
