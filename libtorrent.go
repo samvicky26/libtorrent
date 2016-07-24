@@ -525,6 +525,17 @@ func RemoveTorrent(i int) {
 	unregister(i)
 }
 
+func WaitAll() bool {
+	mu.Lock()
+	c := client
+	if c == nil {
+		mu.Unlock()
+		return true
+	}
+	mu.Unlock()
+	return c.WaitAll()
+}
+
 //export Error
 func Error() string {
 	mu.Lock()
