@@ -34,12 +34,12 @@ Base Features (https://github.com/anacrolix/torrent):
 
 Additional features:
   * UPnP / PMP
-  * Rename Torrent
+  * Rename Torrent top folder
   * Runtime torrent states (save state between restarts)
   * BEPs
     - 14: Local Peers Discovery
-  * Queue Engine
-  * Full Contorl over torrent state (download, stop, pause, resume)
+  * Queue Engine (active/queued torrent list)
+  * Full Contorl over torrent state (download metadata, download data, stop, pause, resume)
 
 ## Headers
 
