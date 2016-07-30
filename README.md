@@ -41,6 +41,11 @@ Additional features:
   * Queue Engine (active/queued torrent list)
   * Full Contorl over torrent state (download metadata, download data, stop, pause, resume)
 
+## Build
+
+    # git clone https://github.com/axet/torrent $GOPATH/src/github.com/anacrolix/torrent
+    # go get -u github.com/axet/libtorrent
+
 ## Headers
 
 `# go tool cgo libtorrent.go`
